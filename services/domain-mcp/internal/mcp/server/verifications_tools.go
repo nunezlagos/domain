@@ -206,10 +206,17 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 		durationMs = int(v)
 	}
 
-	// Leer items actuales, actualizar el matching label, persistir.
+	// El read-modify-write del JSONB va en UNA transacción con FOR UPDATE: dos
+	// update_item concurrentes sobre labels distintos se pisaban el items entero.
+	tx, err := h.pool.Begin(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("begin failed: %v", err)), nil
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
 	var itemsRaw []byte
-	if err := h.q(ctx).QueryRow(ctx,
-		`SELECT items FROM tdd_verifications WHERE id = $1`,
+	if err := tx.QueryRow(ctx,
+		`SELECT items FROM tdd_verifications WHERE id = $1 FOR UPDATE`,
 		id,
 	).Scan(&itemsRaw); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verification not found: %v", err)), nil
@@ -236,11 +243,14 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 		return mcp.NewToolResultError("label no encontrado en items del checkpoint"), nil
 	}
 	newRaw, _ := json.Marshal(items)
-	if _, err := h.q(ctx).Exec(ctx,
+	if _, err := tx.Exec(ctx,
 		`UPDATE tdd_verifications SET items = $2 WHERE id = $1`,
 		id, newRaw,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("commit failed: %v", err)), nil
 	}
 	return toolResultJSON(map[string]any{
 		"verification_id": id.String(),

@@ -304,12 +304,23 @@ func (q *Queries) ListDrafts(ctx context.Context, statusFilter *string) ([]ListD
 	return items, nil
 }
 
-const listIssueSlugsByReqID = `-- name: ListIssueSlugsByReqID :many
-SELECT slug FROM issues WHERE req_id = $1
+const listIssueSlugsByReqNumber = `-- name: ListIssueSlugsByReqNumber :many
+SELECT slug FROM issues
+ WHERE project_id = $1
+   AND slug LIKE 'issue-' || $2::text || '.%'
 `
 
-func (q *Queries) ListIssueSlugsByReqID(ctx context.Context, reqID uuid.UUID) ([]string, error) {
-	rows, err := q.db.Query(ctx, listIssueSlugsByReqID, reqID)
+type ListIssueSlugsByReqNumberParams struct {
+	ProjectID uuid.UUID `json:"project_id"`
+	ReqNumber string    `json:"req_number"`
+}
+
+// El ordinal comparte namespace con el NÚMERO del REQ (REQ-54 y
+// REQ-54-tool-channels emiten los dos issue-54.N), así que el scope tiene que
+// ser el número y no el req_id. El project_id no es opcional: issues no tiene
+// RLS y sin él contaríamos ordinales de otro proyecto (DOMAINSERV-211).
+func (q *Queries) ListIssueSlugsByReqNumber(ctx context.Context, arg ListIssueSlugsByReqNumberParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listIssueSlugsByReqNumber, arg.ProjectID, arg.ReqNumber)
 	if err != nil {
 		return nil, err
 	}

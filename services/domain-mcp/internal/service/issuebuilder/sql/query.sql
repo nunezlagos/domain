@@ -43,8 +43,14 @@ SELECT id FROM sdd_requirements WHERE slug = $1;
 -- name: GetDraftProjectID :one
 SELECT project_id FROM issue_drafts WHERE id = $1;
 
--- name: ListIssueSlugsByReqID :many
-SELECT slug FROM issues WHERE req_id = $1;
+-- name: ListIssueSlugsByReqNumber :many
+-- El ordinal comparte namespace con el NÚMERO del REQ (REQ-54 y
+-- REQ-54-tool-channels emiten los dos issue-54.N), así que el scope tiene que
+-- ser el número y no el req_id. El project_id no es opcional: issues no tiene
+-- RLS y sin él contaríamos ordinales de otro proyecto (DOMAINSERV-211).
+SELECT slug FROM issues
+ WHERE project_id = $1
+   AND slug LIKE 'issue-' || sqlc.arg(req_number)::text || '.%';
 
 -- name: AbandonDraft :exec
 UPDATE issue_drafts SET status = $1, updated_at = now() WHERE id = $2;

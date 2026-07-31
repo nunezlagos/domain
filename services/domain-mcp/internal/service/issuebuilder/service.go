@@ -472,12 +472,13 @@ func (s *Service) materialize(ctx context.Context, d *Draft) (*uuid.UUID, string
 			"domain_issue_create_abandon y recrealo", reqParent)
 	}
 
-	reqID, err := s.resolveOrCreateReq(ctx, d, reqParent)
-	if err != nil {
+	// se llama por su efecto: crea el REQ padre si falta, que IssueSvc.Create
+	// necesita resuelto. El id no se usa — el ordinal se scopea por número
+	if _, err := s.resolveOrCreateReq(ctx, d, reqParent); err != nil {
 		return nil, "", err
 	}
 
-	next, err := s.nextIssueOrdinal(ctx, reqID)
+	next, err := s.nextIssueOrdinal(ctx, reqNum, s.draftProjectID(ctx, d.ID))
 	if err != nil {
 		return nil, "", err
 	}
@@ -524,10 +525,19 @@ func (s *Service) draftProjectID(ctx context.Context, draftID uuid.UUID) *uuid.U
 	return &pid
 }
 
-func (s *Service) nextIssueOrdinal(ctx context.Context, reqID uuid.UUID) (int, error) {
-	slugs, err := s.q(ctx).ListIssueSlugsByReqID(ctx, reqID)
+// El ordinal se scopea por NÚMERO de REQ y no por req_id: reReqNumber colapsa
+// REQ-54 y REQ-54-tool-channels al mismo "54", así que ambos comparten namespace
+// de ordinales y mirar un solo req_id emite un número ya usado (DOMAINSERV-211)
+func (s *Service) nextIssueOrdinal(ctx context.Context, reqNumber string, projectID *uuid.UUID) (int, error) {
+	if projectID == nil {
+		return 0, fmt.Errorf("project_id requerido para scopear el ordinal del REQ-%s", reqNumber)
+	}
+	slugs, err := s.q(ctx).ListIssueSlugsByReqNumber(ctx, issuebuilderdb.ListIssueSlugsByReqNumberParams{
+		ProjectID: *projectID,
+		ReqNumber: reqNumber,
+	})
 	if err != nil {
-		return 0, fmt.Errorf("listar issues del REQ: %w", err)
+		return 0, fmt.Errorf("listar issues del REQ-%s: %w", reqNumber, err)
 	}
 	return siguienteOrdinal(slugs), nil
 }

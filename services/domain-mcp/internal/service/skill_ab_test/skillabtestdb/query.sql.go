@@ -237,15 +237,15 @@ INSERT INTO skill_ab_test_results (
     ab_test_id, version, invocations_count, success_count, success_rate, updated_at
 ) VALUES (
     $1, $2,
-    1, $3,
-    ROUND($3::numeric * 100, 2),
+    1, $3::int,
+    ROUND($3::int::numeric * 100, 2),
     NOW()
 )
 ON CONFLICT (ab_test_id, version) DO UPDATE
 SET invocations_count = skill_ab_test_results.invocations_count + 1,
-    success_count     = skill_ab_test_results.success_count + $3,
+    success_count     = skill_ab_test_results.success_count + $3::int,
     success_rate      = ROUND(
-        (skill_ab_test_results.success_count + $3)::numeric * 100
+        (skill_ab_test_results.success_count + $3::int)::numeric * 100
         / (skill_ab_test_results.invocations_count + 1), 2),
     updated_at        = NOW()
 `

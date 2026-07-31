@@ -101,15 +101,15 @@ INSERT INTO skill_ab_test_results (
     ab_test_id, version, invocations_count, success_count, success_rate, updated_at
 ) VALUES (
     sqlc.arg('ab_test_id'), sqlc.arg('version'),
-    1, sqlc.arg('success_delta'),
-    ROUND(sqlc.arg('success_delta')::numeric * 100, 2),
+    1, sqlc.arg('success_delta')::int,
+    ROUND(sqlc.arg('success_delta')::int::numeric * 100, 2),
     NOW()
 )
 ON CONFLICT (ab_test_id, version) DO UPDATE
 SET invocations_count = skill_ab_test_results.invocations_count + 1,
-    success_count     = skill_ab_test_results.success_count + sqlc.arg('success_delta'),
+    success_count     = skill_ab_test_results.success_count + sqlc.arg('success_delta')::int,
     success_rate      = ROUND(
-        (skill_ab_test_results.success_count + sqlc.arg('success_delta'))::numeric * 100
+        (skill_ab_test_results.success_count + sqlc.arg('success_delta')::int)::numeric * 100
         / (skill_ab_test_results.invocations_count + 1), 2),
     updated_at        = NOW();
 

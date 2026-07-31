@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 26 } // 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 27 } // 27: reportar-consumo-de-memoria — el protocolo de cuándo llamar domain_mem_used, creada antes por MCP y ausente del catálogo (DOMAINSERV-145); 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -568,6 +568,37 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"sesiones futuras: prompt-injection con persistencia. Es la única de estas reglas que no\n" +
 				"admite excepción por conveniencia, y queda escrita antes de que exista el primer agente\n" +
 				"web —no después.\n",
+		},
+		{
+			Slug:       "reportar-consumo-de-memoria",
+			Name:       "Reportar el consumo de memoria al cerrar el turno",
+			Kind:       "convention",
+			SourceFile: "AGENTS.md",
+			BodyMD: "El hook UserPromptSubmit inyecta, en el bloque de memorias, el UUID completo de cada\n" +
+				"observación y el prompt_id del turno. Esos son los dos parámetros de `domain_mem_used`.\n\n" +
+				"## Cuándo reportar\n\n" +
+				"UNA vez por turno, al cerrar, y SOLO si el bloque de memorias vino en el contexto. Si no\n" +
+				"hubo memorias inyectadas, no hay nada que reportar.\n\n" +
+				"- `candidate_ids`: TODOS los ids del bloque, hayan servido o no. Es el denominador: sin\n" +
+				"  él no hay tasa que medir.\n" +
+				"- `observation_ids`: las que efectivamente influyeron en la respuesta. Si ninguna sirvió,\n" +
+				"  vacío — es una señal válida y se registra.\n\n" +
+				"## Cuándo NO reportar\n\n" +
+				"- Si el bloque no trae ids o no trae prompt_id.\n" +
+				"- NUNCA con UUIDs inventados o reconstruidos de memoria.\n\n" +
+				"No reportar NO significa \"no sirvieron\": significa que no hay dato. Un UUID adivinado\n" +
+				"envenena la señal, y la señal ahora alimenta el ranking de `mem_search` — el ruido se\n" +
+				"propaga a lo que el sistema recupera después.\n\n" +
+				"## Por qué el cliente reporta y el server no infiere\n\n" +
+				"El server solo podría adivinar mirando el prompt siguiente, y el propósito de la señal\n" +
+				"es alimentar el ranking. Un ranking entrenado con adivinanzas es peor que uno por\n" +
+				"relevancia: agrega ruido con apariencia de dato.\n\n" +
+				"Tampoco se rechaza un turno sin reporte. Un turno de conversación no es una unidad\n" +
+				"reintentable como un step de flow: el hook Stop cierra con `domain_turn_complete` pase\n" +
+				"lo que pase, así que si el server rechazara, la única salida del agente sería inventar\n" +
+				"UUIDs para desbloquearse.\n\n" +
+				"Establecido en DOMAINSERV-145. El consumidor de la señal es el boost del ranking en\n" +
+				"`SearchHybrid`, que la suma como tercera modalidad del RRF.\n",
 		},
 	}
 

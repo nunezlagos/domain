@@ -145,10 +145,11 @@ func (q *Queries) InsertChunk(ctx context.Context, arg InsertChunkParams) (Inser
 
 const insertDoc = `-- name: InsertDoc :one
 INSERT INTO knowledge_docs (
-    project_id, created_by, title, body, source, source_url, tags, metadata
+    project_id, created_by, title, body, source, source_url, tags, metadata, has_attachments
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7, $8
+    $5, $6, $7, $8,
+    $9
 )
 RETURNING id, project_id, created_by, title, body, source,
           source_url,
@@ -156,14 +157,15 @@ RETURNING id, project_id, created_by, title, body, source,
 `
 
 type InsertDocParams struct {
-	ProjectID uuid.UUID  `json:"project_id"`
-	CreatedBy *uuid.UUID `json:"created_by"`
-	Title     string     `json:"title"`
-	Body      string     `json:"body"`
-	Source    string     `json:"source"`
-	SourceUrl *string    `json:"source_url"`
-	Tags      []string   `json:"tags"`
-	Metadata  []byte     `json:"metadata"`
+	ProjectID      uuid.UUID  `json:"project_id"`
+	CreatedBy      *uuid.UUID `json:"created_by"`
+	Title          string     `json:"title"`
+	Body           string     `json:"body"`
+	Source         string     `json:"source"`
+	SourceUrl      *string    `json:"source_url"`
+	Tags           []string   `json:"tags"`
+	Metadata       []byte     `json:"metadata"`
+	HasAttachments bool       `json:"has_attachments"`
 }
 
 type InsertDocRow struct {
@@ -191,6 +193,7 @@ func (q *Queries) InsertDoc(ctx context.Context, arg InsertDocParams) (InsertDoc
 		arg.SourceUrl,
 		arg.Tags,
 		arg.Metadata,
+		arg.HasAttachments,
 	)
 	var i InsertDocRow
 	err := row.Scan(

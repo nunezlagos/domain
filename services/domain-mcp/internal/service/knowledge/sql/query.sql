@@ -1,9 +1,10 @@
 -- name: InsertDoc :one
 INSERT INTO knowledge_docs (
-    project_id, created_by, title, body, source, source_url, tags, metadata
+    project_id, created_by, title, body, source, source_url, tags, metadata, has_attachments
 ) VALUES (
     sqlc.arg('project_id'), sqlc.arg('created_by'), sqlc.arg('title'), sqlc.arg('body'),
-    sqlc.arg('source'), sqlc.arg('source_url'), sqlc.arg('tags'), sqlc.arg('metadata')
+    sqlc.arg('source'), sqlc.arg('source_url'), sqlc.arg('tags'), sqlc.arg('metadata'),
+    sqlc.arg('has_attachments')
 )
 RETURNING id, project_id, created_by, title, body, source,
           source_url,

@@ -59,6 +59,9 @@ func (d *Deps) handleAttachmentIndex(ctx context.Context, req mcp.CallToolReques
 		Title: title, Body: text, Source: "attachment",
 		Tags:     []string{"attachment"},
 		Metadata: map[string]any{"attachment_id": attID.String()},
+		// este doc viene de un adjunto por definición: es el único lugar del repo que
+		// puede poblar la columna con la verdad (DOMAINSERV-144)
+		HasAttachments: true,
 	})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("index: %v", err)), nil

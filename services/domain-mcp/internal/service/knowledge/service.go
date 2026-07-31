@@ -42,22 +42,22 @@ type Document struct {
 }
 
 type Chunk struct {
-	ID          uuid.UUID
-	DocumentID  uuid.UUID
-	ChunkIndex  int
-	Content     string
-	CreatedAt   time.Time
+	ID         uuid.UUID
+	DocumentID uuid.UUID
+	ChunkIndex int
+	Content    string
+	CreatedAt  time.Time
 }
 
 type SearchResult struct {
-	DocumentID  uuid.UUID
-	ChunkID     uuid.UUID
-	ChunkIndex  int
-	Title       string
-	Snippet     string
-	Score       float64
-	ProjectID   uuid.UUID
-	CreatedAt   time.Time
+	DocumentID uuid.UUID
+	ChunkID    uuid.UUID
+	ChunkIndex int
+	Title      string
+	Snippet    string
+	Score      float64
+	ProjectID  uuid.UUID
+	CreatedAt  time.Time
 }
 
 type SaveInput struct {
@@ -70,6 +70,9 @@ type SaveInput struct {
 	SourceURL      string
 	Tags           []string
 	Metadata       map[string]any
+	// lo setea quien indexa el texto de un adjunto; sin esto la columna se leía
+	// siempre en false y el dato que exponía era mentira (DOMAINSERV-144)
+	HasAttachments bool
 }
 
 type Service struct {
@@ -248,14 +251,15 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	}
 
 	docRow, err := q.InsertDoc(ctx, knowledgedb.InsertDocParams{
-		ProjectID: in.ProjectID,
-		CreatedBy: in.CreatedBy,
-		Title:     in.Title,
-		Body:      in.Body,
-		Source:    in.Source,
-		SourceUrl: srcURL,
-		Tags:      in.Tags,
-		Metadata:  metaJSON,
+		ProjectID:      in.ProjectID,
+		CreatedBy:      in.CreatedBy,
+		Title:          in.Title,
+		Body:           in.Body,
+		Source:         in.Source,
+		SourceUrl:      srcURL,
+		Tags:           in.Tags,
+		Metadata:       metaJSON,
+		HasAttachments: in.HasAttachments,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("insert doc: %w", err)

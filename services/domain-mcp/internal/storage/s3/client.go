@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -63,7 +64,7 @@ func (c *Client) GenerateUploadURL(ctx context.Context, key string) (string, err
 	req, err := ps.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),
-	}, s3.WithPresignExpires(15 * 60)) // 15 minutes
+	}, s3.WithPresignExpires(15*time.Minute))
 	if err != nil {
 		return "", fmt.Errorf("presign put: %w", err)
 	}
@@ -76,7 +77,7 @@ func (c *Client) GenerateDownloadURL(ctx context.Context, key string) (string, e
 	req, err := ps.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),
-	}, s3.WithPresignExpires(60*60)) // 1 hour
+	}, s3.WithPresignExpires(time.Hour))
 	if err != nil {
 		return "", fmt.Errorf("presign get: %w", err)
 	}

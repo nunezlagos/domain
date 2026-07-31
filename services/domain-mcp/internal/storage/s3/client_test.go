@@ -71,6 +71,26 @@ func TestGenerateDownloadURL_BucketRequired(t *testing.T) {
 	require.Error(t, err)
 }
 
+// DOMAINSERV-213: WithPresignExpires recibe un time.Duration. Pasarle el entero
+// de segundos daba 900ns, que se serializa como X-Amz-Expires=0 y nace expirada.
+func TestClient_GenerateUploadURL_ExpiraEn15Minutos(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://localhost:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	require.Equal(t, "900", expiresParam(t, raw), "el PUT presignado debe durar 15 minutos en SEGUNDOS")
+}
+
+func TestClient_GenerateDownloadURL_ExpiraEn1Hora(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://localhost:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateDownloadURL(context.Background(), "test/key")
+	require.NoError(t, err)
+
+	require.Equal(t, "3600", expiresParam(t, raw), "el GET presignado debe durar 1 hora en SEGUNDOS")
+}
+
 // DOMAINSERV-215: un 404 es la unica respuesta que significa "no esta".
 func TestClient_ConfirmObject_ObjetoAusente_DevuelveFalseSinError(t *testing.T) {
 	c := newTestClient(t, Config{Endpoint: stubS3(t, http.StatusNotFound), Bucket: "test", Key: "k", Secret: "s"})

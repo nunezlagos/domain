@@ -9,10 +9,10 @@
 // alimentar el ranking. Un ranking entrenado con adivinanzas es peor que uno
 // por relevancia: agrega ruido con apariencia de dato.
 //
-// ESTADO: el write path está completo, pero la tool es inalcanzable — el hook
-// UserPromptSubmit no inyecta el prompt_id ni los ids de las observaciones, así
-// que el agente no tiene con qué llamarla. Las descripciones lo dicen para que
-// nadie invente UUIDs por completar el contrato.
+// ESTADO: invocable desde DOMAINSERV-145. El hook UserPromptSubmit inyecta el id
+// completo de cada observación junto a su texto y el prompt_id del turno, que son
+// los dos parámetros requeridos. La señal la consume el ranking de SearchHybrid
+// como tercera modalidad del RRF: reportar cambia lo que la búsqueda devuelve.
 package mcpserver
 
 import (
@@ -28,18 +28,17 @@ func toolMemUsed() mcp.Tool {
 			"candidate_ids = TODAS las memorias que viste (es el denominador: sin el no hay tasa que medir). "+
 			"observation_ids = las que realmente influyeron; si ninguna sirvio, mandalo vacio — eso tambien es una "+
 			"senal valida y se registra. No reportar NO significa 'no sirvieron': significa que no hay dato. "+
-			"HOY ESTA TOOL NO ES INVOCABLE: el hook no te entrega ninguno de sus dos parametros requeridos "+
-			"(ver DOMAINSERV-145). No la llames con valores inventados — un UUID adivinado envenena la senal, "+
-			"y no reportar es el estado correcto mientras el hook no los inyecte."),
+			"Los dos parametros requeridos te los inyecta el hook UserPromptSubmit en el bloque de memorias. "+
+			"Si NO estan ahi, no la llames con valores inventados: un UUID adivinado envenena la senal, y no "+
+			"reportar es el estado correcto."),
 		mcp.WithString("prompt_id",
-			mcp.Description("UUID del turn que devolvio domain_prompt_capture. El hook lo escribe en "+
-				"~/.local/state/domain/turn-<session_id>.id para que lo consuma el hook Stop: NO te lo inyecta "+
-				"en el contexto, asi que hoy no tenes de donde sacarlo"),
+			mcp.Description("UUID del turn que devolvio domain_prompt_capture. El hook UserPromptSubmit te lo "+
+				"inyecta al final del bloque de memorias, en la llamada de ejemplo a domain_mem_used"),
 			mcp.Required(),
 		),
 		mcp.WithArray("candidate_ids",
-			mcp.Description("UUIDs de TODAS las observaciones que se te inyectaron en este turn. El hook hoy "+
-				"inyecta el contenido y descarta el id, asi que este dato tampoco te llega"),
+			mcp.Description("UUIDs de TODAS las observaciones que se te inyectaron en este turn. El hook los "+
+				"antepone completos a cada memoria del bloque: son esos, no un prefijo ni un resumen"),
 			mcp.Required(),
 		),
 		mcp.WithArray("observation_ids",

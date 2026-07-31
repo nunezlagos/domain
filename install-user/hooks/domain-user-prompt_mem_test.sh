@@ -90,6 +90,31 @@ verificar "content vacío no inyecta nada" "$(envelope '{"results":[{"id":"x","c
 verificar "JSON inválido no inyecta nada" 'no soy json' "" vacio
 verificar "envelope sin content no inyecta nada" '{"result":{}}' "" vacio
 
+# ── DOMAINSERV-145: el id tiene que llegar al prompt inyectado ───────────────────────
+# El hook inyectaba el contenido y descartaba el id, así que el agente no tenía con qué
+# llamar a domain_mem_used: la tool pedía un observation_id que nunca había visto. El id
+# va COMPLETO y no abreviado, porque la tool exige UUIDs y un prefijo no sirve.
+verificar "el id de la observación se inyecta completo" "$(envelope "$nuevo")" "11111111-1111-1111-1111-111111111111"
+verificar "el id acompaña a su texto" "$(envelope "$nuevo")" "11111111-1111-1111-1111-111111111111 una decision importante sobre el shape"
+
+dos='{"results":[{"id":"aaaaaaaa-1111-1111-1111-111111111111","content":"primera memoria"},{"id":"bbbbbbbb-2222-2222-2222-222222222222","content":"segunda memoria"}],"count":2}'
+verificar "con varias memorias se inyectan todos los ids (1/2)" "$(envelope "$dos")" "aaaaaaaa-1111-1111-1111-111111111111"
+verificar "con varias memorias se inyectan todos los ids (2/2)" "$(envelope "$dos")" "bbbbbbbb-2222-2222-2222-222222222222"
+
+# Una observación sin id sigue aportando contexto: se inyecta el texto igual. Perder la
+# memoria entera por no poder reportarla sería peor que no poder reportarla.
+sin_id='{"results":[{"content":"memoria sin id que igual sirve"}],"count":1}'
+verificar "una memoria sin id igual se inyecta" "$(envelope "$sin_id")" "memoria sin id que igual sirve"
+
+# domain_mem_used declara DOS parámetros required: prompt_id y candidate_ids. Inyectar
+# solo los ids de observaciones deja la tool igual de inalcanzable, con el otro required
+# faltando. El hook YA tiene el prompt_id — lo escribe en turn-<session_id>.id para el
+# hook Stop — así que acá solo hay que pasárselo también al agente.
+DOMAIN_TURN_PID="99999999-9999-9999-9999-999999999999" \
+  verificar "el prompt_id se inyecta cuando el hook lo tiene" "$(envelope "$nuevo")" "99999999-9999-9999-9999-999999999999"
+
+verificar "sin prompt_id no se inventa nada" "$(envelope "$nuevo")" "prompt_id=" no_contiene
+
 echo
 if [ "$fallos" -gt 0 ]; then
   echo "$fallos test(s) FALLARON"

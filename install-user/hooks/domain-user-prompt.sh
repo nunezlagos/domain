@@ -201,6 +201,9 @@ fi
 # observaciones relevantes. Best-effort: cualquier fallo deja mem_msg vacío.
 if [ -n "$_mempid" ]; then
   wait "$_mempid" 2>/dev/null
+  # el pid va por env y no por argv: la linea de abajo es el ancla del extractor de
+  # domain-user-prompt_mem_test.sh, y cambiarla romperia el setup del test
+  export DOMAIN_TURN_PID="$pid"
   mem_msg=$(cat "$_memf" 2>/dev/null | python3 -c '
 import json, sys
 try:
@@ -223,11 +226,24 @@ for c in d.get("result", {}).get("content", []):
         # El corte a 160 de acá suele comérselo, pero no cuando la observación mide entre
         # 160 y 200: ahí quedaría "...[truncated]" pegado al final del texto inyectado.
         txt = txt.replace(" ...[truncated]", "").replace("...[truncated]", "")
-        items.append(txt[:160].rstrip())
+        # DOMAINSERV-145: el id va COMPLETO adelante del texto. Sin el, el agente no
+        # tiene con que llamar a domain_mem_used: la tool exige UUIDs y un prefijo no
+        # sirve. Una observacion sin id se inyecta igual — perder la memoria entera
+        # seria peor que no poder reportarla.
+        oid = (r.get("id") or r.get("ID") or "").strip()
+        cuerpo = txt[:160].rstrip()
+        items.append(oid + " " + cuerpo if oid else cuerpo)
     break
 if items:
+    import os
+    # el prompt_id es el otro parametro required de domain_mem_used; sin el la tool
+    # sigue siendo inalcanzable aunque los observation_ids ya vayan
+    pid = (os.environ.get("DOMAIN_TURN_PID") or "").strip()
+    cierre = (" Reportalo al cerrar el turno con domain_mem_used(prompt_id=\"" + pid +
+              "\", candidate_ids=[los ids de arriba], observation_ids=[las que usaste])."
+              if pid else "")
     print("domain: memorias relevantes a este prompt (por relevancia, no recencia) — "
-          "considerá si aplican antes de responder: " + " | ".join(items))
+          "considerá si aplican antes de responder: " + " | ".join(items) + cierre)
 ' 2>/dev/null)
 fi
 rm -f "$_memf" 2>/dev/null

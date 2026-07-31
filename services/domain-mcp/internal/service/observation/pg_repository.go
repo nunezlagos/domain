@@ -186,12 +186,22 @@ vec AS (
   WHERE deleted_at IS NULL AND embedding IS NOT NULL
   LIMIT $3
 ),
+usage AS (
+  SELECT observation_id AS id, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC) AS r
+  FROM knowledge_observation_usage_log
+  WHERE used = true
+  GROUP BY observation_id
+  LIMIT $3
+),
 fused AS (
   SELECT id,
-         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0) AS score,
+         COALESCE(1.0 / ($4 + bm25.r), 0) + COALESCE(1.0 / ($4 + vec.r), 0)
+           + COALESCE(1.0 / ($4 + usage.r), 0) AS score,
          COALESCE(bm25.r, 0) AS bm25_rank,
          COALESCE(vec.r, 0) AS vec_rank
-  FROM bm25 FULL OUTER JOIN vec USING (id)
+  -- usage entra por LEFT y no por FULL OUTER: el boost sube lo que ya matcheó, y con
+  -- FULL OUTER una observación usada aparecía aunque no tuviera que ver con la query
+  FROM bm25 FULL OUTER JOIN vec USING (id) LEFT JOIN usage USING (id)
 )
 SELECT o.id, o.project_id, o.created_by, o.session_id,
        o.content, o.observation_type, o.tags, o.metadata, o.created_at, o.updated_at,

@@ -22,6 +22,7 @@ import (
 
 type fixture struct {
 	svc       *obssvc.Service
+	pool      *pgxpool.Pool
 	orgID     uuid.UUID
 	projectID uuid.UUID
 	owner     uuid.UUID
@@ -57,7 +58,7 @@ func setup(t *testing.T) (*fixture, func()) {
 	require.NoError(t, err)
 
 	svc := &obssvc.Service{Pool: pool, Audit: rec, Embedder: llm.FakeEmbedder{Dim: dmigrate.EmbeddingDim}}
-	f := &fixture{svc: svc, orgID: org.ID, projectID: proj.ID, owner: owner.UserID}
+	f := &fixture{svc: svc, pool: pool, orgID: org.ID, projectID: proj.ID, owner: owner.UserID}
 	return f, func() {
 		pool.Close()
 		_ = pgC.Terminate(ctx)

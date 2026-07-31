@@ -163,6 +163,10 @@ func (h *HTTPLogger) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		requestID := uuid.New()
+		// DOMAINSERV-189: el workflow id NO se inventa. Un workflow es una cadena de
+		// llamadas correlacionada a propósito; generando uno por request, el Tracker
+		// creaba una fila basura por cada llamada MCP — total_tool_calls=1, sin
+		// atribuir y sin cerrar. Correlacionar UN request ya es tarea del request id.
 		wfID := WorkflowIDFromContext(r.Context())
 		if wfID == uuid.Nil {
 			if hdr := r.Header.Get("X-Workflow-Id"); hdr != "" {
@@ -170,19 +174,22 @@ func (h *HTTPLogger) Middleware(next http.Handler) http.Handler {
 					wfID = parsed
 				}
 			}
-			if wfID == uuid.Nil {
-				wfID = NewWorkflowID()
-			}
 		}
 		rw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
 		ctx := context.WithValue(r.Context(), requestIDKey{}, requestID)
-		ctx = WithWorkflowID(ctx, wfID)
+		// WithWorkflowID genera uno si le pasan Nil, así que sin workflow no se llama
+		if wfID != uuid.Nil {
+			ctx = WithWorkflowID(ctx, wfID)
+		}
 		next.ServeHTTP(rw, r.WithContext(ctx))
 
 		dur := time.Since(start).Milliseconds()
 		rw.Header().Set("X-Request-Id", requestID.String())
-		rw.Header().Set("X-Workflow-Id", wfID.String())
+		// devolver un uuid inventado invita al cliente a reusarlo como si fuera suyo
+		if wfID != uuid.Nil {
+			rw.Header().Set("X-Workflow-Id", wfID.String())
+		}
 
 		h.enqueue(HTTPLog{
 			RequestID:  requestID,

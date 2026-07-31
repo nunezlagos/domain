@@ -3,12 +3,14 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // Client wraps S3 SDK for presigned URL operations.
@@ -87,10 +89,20 @@ func (c *Client) ConfirmObject(ctx context.Context, key string) (bool, error) {
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),
 	})
-	if err != nil {
+	if err == nil {
+		return true, nil
+	}
+	if isNotFound(err) {
 		return false, nil
 	}
-	return true, nil
+	return false, fmt.Errorf("head object %q: %w", key, err)
+}
+
+// isNotFound distingue "el objeto no esta" de cualquier otra falla. El SDK
+// mapea el 404 de HEAD por status, no por el body, asi que MinIO cae aca igual.
+func isNotFound(err error) bool {
+	var nf *types.NotFound
+	return errors.As(err, &nf)
 }
 
 // DeleteObject removes an object from S3.

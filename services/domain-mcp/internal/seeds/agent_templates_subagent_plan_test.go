@@ -38,6 +38,19 @@ func TestAgentTemplatesSeedVersion_CubreElSubagentPlan(t *testing.T) {
 		"sembrar subagent_plan exige bump de agentTemplatesSeedVersion; sin él el re-seed no corre")
 }
 
+// DOMAINSERV-206 y 155 suman dos agentes al catálogo que un SubagentPlan puede
+// nombrar. El plan viaja seedeado en metadata.subagent_plan, así que sin bump un
+// plan que los nombre no llega a la BD: el catálogo del cliente los tiene y el
+// del server no. Este test ata la presencia de los slugs al número.
+func TestAgentTemplatesSeedVersion_CubreLosAgentesDe206Y155(t *testing.T) {
+	for _, slug := range []string{"knowledge-ingest", "gherkin-verify"} {
+		require.Contains(t, phases.CatalogAgents, slug,
+			"el catálogo tiene que nombrar al agente para que un plan pueda delegarle")
+	}
+	require.GreaterOrEqual(t, agentTemplatesSeedVersion, 23,
+		"206 y 155 comparten UN solo bump a 23; sin él el re-seed se skippea en silencio")
+}
+
 // DOMAINSERV-161: el fan-out de domain_policy_get en sdd-review vive en el prompt
 // seedeado. seeds.go skippea el seeder si applied_version >= Version(), así que sin bump
 // el prompt VIEJO sigue gobernando el gate en producción — y el síntoma es

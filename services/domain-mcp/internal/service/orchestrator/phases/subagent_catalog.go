@@ -8,7 +8,9 @@ import "strings"
 // requisito, y por eso toda mención va con MarcaFallback.
 var CatalogAgents = []string{
 	"domain-memory",
+	"gherkin-verify",
 	"git-archaeology",
+	"knowledge-ingest",
 	"policy-lookup",
 	"repo-scout",
 	"ticket-triage",

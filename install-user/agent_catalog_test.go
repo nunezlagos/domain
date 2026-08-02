@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sort"
 	"strings"
 	"testing"
 )
@@ -15,7 +16,7 @@ func TestAgentCatalog_EnumeraCadaAgenteDelDirectorio(t *testing.T) {
 		t.Fatalf("agentCatalog: %v", err)
 	}
 
-	esperados := []string{"domain-memory", "git-archaeology", "policy-lookup", "repo-scout", "ticket-triage"}
+	esperados := []string{"domain-memory", "gherkin-verify", "git-archaeology", "knowledge-ingest", "policy-lookup", "repo-scout", "ticket-triage"}
 	if len(cat) != len(esperados) {
 		t.Fatalf("el catálogo tiene %d agentes, se esperaban %d: %v", len(cat), len(esperados), slugs(cat))
 	}
@@ -140,6 +141,196 @@ func TestAgentCatalog_TodoAgenteDeclaraNameYModelo(t *testing.T) {
 			t.Errorf("%s: model lleva TIER (haiku|sonnet|opus), no un ID pineado", a.slug)
 		}
 	}
+}
+
+// DOMAINSERV-206: knowledge-ingest es el ÚNICO agente del catálogo con una tool de
+// ESCRITURA (domain_knowledge_save), y la regla que lo habilita es acotada: se delega
+// escritura cuando el agente EJECUTA una decisión ya tomada, no cuando la TOMA. Lo que
+// Claude Code hace cumplir es `tools`, así que la allowlist tiene que enumerar
+// EXACTAMENTE lo permitido: una entrada de más es una escritura que nadie decidió.
+func TestAgentCatalog_KnowledgeIngest_AllowlistEnumeraExactamenteLoPermitido(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	ki := buscar(t, cat, "knowledge-ingest")
+	declaradas := toolsDeclaradas(lineaDe(frontmatter(t, ki.claude), "tools:"))
+	esperadas := map[string]bool{
+		"mcp__domain-mcp__domain_knowledge_save": true,
+		"Read":                                   true,
+		"Glob":                                   true,
+		"ToolSearch":                             true,
+	}
+
+	minima := sortedKeys(esperadas)
+	for _, tool := range declaradas {
+		if !esperadas[tool] {
+			t.Errorf("la allowlist declara %q, fuera de la mínima del ticket: %v", tool, minima)
+		}
+		delete(esperadas, tool)
+	}
+	for _, faltante := range sortedKeys(esperadas) {
+		t.Errorf("falta %q en la allowlist: sin ella el agente no puede completar su procedimiento", faltante)
+	}
+}
+
+// "No basta con no listarlas": una tool omitida de `tools` queda fuera por efecto, pero
+// nada documenta la intención ni frena a quien agregue una entrada más adelante. Las
+// prohibidas van DENEGADAS de forma explícita, además de ausentes de la allowlist.
+func TestAgentCatalog_KnowledgeIngest_LasProhibidasEstanDenegadasNoSoloOmitidas(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	fm := frontmatter(t, buscar(t, cat, "knowledge-ingest").claude)
+	permitidas := lineaDe(fm, "tools:")
+	denegadas := lineaDe(fm, "disallowedTools:")
+
+	// WebFetch/WebSearch entran a la lista por el requisito 3 del ticket: un agente que
+	// ingesta contenido web y puede escribir convierte una página hostil en instrucción
+	// PERSISTENTE, re-inyectada en toda sesión futura.
+	for _, prohibida := range []string{
+		"mcp__domain-mcp__domain_mem_save", "Write", "Edit", "NotebookEdit", "Bash",
+		"WebFetch", "WebSearch",
+	} {
+		if strings.Contains(permitidas, prohibida) {
+			t.Errorf("la allowlist incluye %q, que el ticket prohíbe", prohibida)
+		}
+		if !strings.Contains(denegadas, prohibida) {
+			t.Errorf("%q no figura en disallowedTools: la prohibición queda implícita", prohibida)
+		}
+	}
+}
+
+// Mismo criterio que git-archaeology: se instala solo donde su restricción es expresable.
+// La contención de este agente ES la allowlist de tools, y OpenCode no la expresa por
+// agente —restringe con `permission:` (edit/write/bash), que no alcanza a las tools MCP—,
+// así que una variante ahí distribuiría el único agente con escritura SIN su guard.
+func TestAgentCatalog_KnowledgeIngest_SinVarianteOpencode_LaAllowlistNoEsExpresableAhi(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	ki := buscar(t, cat, "knowledge-ingest")
+	if len(ki.opencode) != 0 {
+		t.Errorf("knowledge-ingest no debe tener variante de OpenCode: su allowlist de tools MCP no es expresable ahí (%d bytes)", len(ki.opencode))
+	}
+	if len(ki.claude) == 0 {
+		t.Error("knowledge-ingest debe traer su template de Claude Code")
+	}
+}
+
+// El retorno es el ack, y solo el ack: si devuelve el texto del documento se pierde toda
+// la ganancia que justifica el agente (~20k tokens del documento contra ~80 del ack).
+func TestAgentCatalog_KnowledgeIngest_DeclaraElAckYProhibeElContenido(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	cuerpo := string(buscar(t, cat, "knowledge-ingest").claude)
+	for _, campo := range []string{"chunks", "ids"} {
+		if !strings.Contains(cuerpo, campo) {
+			t.Errorf("el formato de retorno no declara %q: el ack es lo único que este agente devuelve", campo)
+		}
+	}
+	if !strings.Contains(cuerpo, "source_url") {
+		t.Error("el template no nombra source_url: es el argumento por el que un documento de origen web entraría, y la prohibición tiene que ser sobre el mecanismo concreto")
+	}
+}
+
+// DOMAINSERV-155: el plan de fan-out de sdd-verify existe desde el arranque del epic y
+// caía en general-purpose, que hereda modelo y effort de la sesión. El agente que lo
+// ejecuta no inventa su salida: cumple el contrato que el template de la fase ya define,
+// y un campo que falte deja al orquestador sin cómo agregar los N lotes en un veredicto.
+func TestAgentCatalog_GherkinVerify_DeclaraElContratoDeSddVerify(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	cuerpo := string(buscar(t, cat, "gherkin-verify").claude)
+	for _, campo := range []string{
+		"scenarios_total", "scenarios_passed", "scenarios_failed",
+		"scenarios_uncovered", "coverage_estimate", "verdict",
+	} {
+		if !strings.Contains(cuerpo, campo) {
+			t.Errorf("el template no declara %q del contrato de sdd-verify: el orquestador no puede agregar los lotes", campo)
+		}
+	}
+	// partial y no fail cuando falta cobertura: lo manda el prompt de la fase, y confundirlos
+	// convierte un hueco de tests en un flow abortado.
+	if !strings.Contains(cuerpo, "partial") {
+		t.Error("el template no nombra el verdict partial: sin cobertura el veredicto no es fail")
+	}
+	// Es el agente que decide si algo pasó. Sin la sección donde declararlo, un lote sin
+	// evidencia de test ejecutado se reporta igual que uno verificado.
+	if !strings.Contains(cuerpo, "## Candidato a memoria") {
+		t.Error("gherkin-verify descubre territorio nuevo: le falta la sección Candidato a memoria")
+	}
+}
+
+// La decisión Bash/no-Bash fija el riesgo del agente: con Bash necesita un guard propio
+// —como git-archaeology— porque `go test` compila y ejecuta código del repo. Este agente
+// NO lo lleva: la suite la corre quien delega y le pasa la salida, así que el agente mapea
+// escenarios a tests con Read/Grep/Glob y se queda read-only sin depender de ningún hook.
+func TestAgentCatalog_GherkinVerify_ReadOnlySinBashYSinGuard(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	gv := buscar(t, cat, "gherkin-verify")
+	fm := frontmatter(t, gv.claude)
+	permitidas := toolsDeclaradas(lineaDe(fm, "tools:"))
+	esperadas := map[string]bool{"Read": true, "Grep": true, "Glob": true}
+	minima := sortedKeys(esperadas)
+
+	for _, tool := range permitidas {
+		if !esperadas[tool] {
+			t.Errorf("la allowlist declara %q, fuera de la mínima read-only: %v", tool, minima)
+		}
+		delete(esperadas, tool)
+	}
+	for _, faltante := range sortedKeys(esperadas) {
+		t.Errorf("falta %q: sin ella el agente no puede mapear escenarios a tests", faltante)
+	}
+	if guards := guardsDeclarados(gv.claude); len(guards) != 0 {
+		t.Errorf("gherkin-verify declara guards %v y no tiene Bash: un hook que no acota nada es deuda", guards)
+	}
+	// El agente reporta el veredicto del lote; el checkpoint de verificación lo escribe el
+	// hilo principal, que es el único que ve los N lotes.
+	if denegadas := lineaDe(fm, "disallowedTools:"); !strings.Contains(denegadas, "domain_verify_update_item") {
+		t.Error("domain_verify_update_item debe estar denegado: el agente valida un lote, no cierra el checkpoint")
+	}
+}
+
+// toolsDeclaradas parte una línea `tools:` (una sola o con continuación indentada) en los
+// nombres que declara. Sirve para verificar la allowlist como CONJUNTO: un Contains por
+// nombre da verde con entradas de más, que en un agente con escritura es justo el riesgo.
+func toolsDeclaradas(linea string) []string {
+	_, valor, _ := strings.Cut(linea, ":")
+	var out []string
+	for _, campo := range strings.FieldsFunc(valor, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ' ' || r == '\t'
+	}) {
+		if campo != "" && campo != "-" {
+			out = append(out, campo)
+		}
+	}
+	return out
+}
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func slugs(cat []agentTemplate) []string {

@@ -204,22 +204,93 @@ func TestAgentCatalog_KnowledgeIngest_LasProhibidasEstanDenegadasNoSoloOmitidas(
 	}
 }
 
-// Mismo criterio que git-archaeology: se instala solo donde su restricción es expresable.
-// La contención de este agente ES la allowlist de tools, y OpenCode no la expresa por
-// agente —restringe con `permission:` (edit/write/bash), que no alcanza a las tools MCP—,
-// así que una variante ahí distribuiría el único agente con escritura SIN su guard.
-func TestAgentCatalog_KnowledgeIngest_SinVarianteOpencode_LaAllowlistNoEsExpresableAhi(t *testing.T) {
+// La contención de este agente ES su allowlist, y OpenCode SÍ la expresa por agente: las
+// claves de `permission` se matchean como patrones contra el NOMBRE de la tool, MCP incluidas
+// —la doc de OpenCode usa `"mymcp_*": "deny"` para denegar un server entero y `"mymcp_search":
+// "ask"` para una sola—, y `"*"` cubre las no enumeradas. Por eso la variante no puede
+// quedarse en el molde read-only del catálogo (edit/write/bash deny): ahí todo el server
+// domain-mcp quedaría permitido y se distribuiría el único agente con escritura sin su guard.
+func TestAgentCatalog_KnowledgeIngest_LaVarianteOpencodeAcotaIgualDeFuerte(t *testing.T) {
 	cat, err := agentCatalog()
 	if err != nil {
 		t.Fatalf("agentCatalog: %v", err)
 	}
 
 	ki := buscar(t, cat, "knowledge-ingest")
-	if len(ki.opencode) != 0 {
-		t.Errorf("knowledge-ingest no debe tener variante de OpenCode: su allowlist de tools MCP no es expresable ahí (%d bytes)", len(ki.opencode))
+	if len(ki.opencode) == 0 {
+		t.Fatalf("knowledge-ingest no trae variante %s: la aceptación de DOMAINSERV-206 la pide", varianteOpencode)
 	}
-	if len(ki.claude) == 0 {
-		t.Error("knowledge-ingest debe traer su template de Claude Code")
+	perm := lineaDe(frontmatter(t, ki.opencode), "permission:")
+
+	if !strings.Contains(perm, `"*": deny`) {
+		t.Error(`la variante no arranca en default-deny ("*": deny): toda tool no enumerada queda permitida, incluido todo domain-mcp`)
+	}
+	esperadas := map[string]bool{
+		"domain-mcp_domain_knowledge_save": true, "read": true, "glob": true,
+	}
+	minima := sortedKeys(esperadas)
+	for _, tool := range clavesConAccion(perm, "allow") {
+		if !esperadas[tool] {
+			t.Errorf("permission permite %q, fuera de la mínima del ticket: %v", tool, minima)
+		}
+		delete(esperadas, tool)
+	}
+	for _, faltante := range sortedKeys(esperadas) {
+		t.Errorf("falta %q permitida: sin ella el agente no puede completar su procedimiento", faltante)
+	}
+
+	// Mismo criterio que la variante de Claude Code: con default-deny las prohibidas ya quedan
+	// fuera por efecto, pero nada documenta la intención ni frena a quien afloje el `"*"`.
+	for _, prohibida := range []string{
+		"domain-mcp_domain_mem_save", "write", "edit", "bash", "webfetch", "websearch",
+	} {
+		if !strings.Contains(perm, prohibida+": deny") {
+			t.Errorf("%q no figura denegada de forma explícita en permission: la prohibición queda implícita en el default", prohibida)
+		}
+	}
+}
+
+// clavesConAccion devuelve las claves del bloque `permission:` cuyo valor es la acción dada.
+// Verifica los permitidos como CONJUNTO: un Contains por nombre da verde con una entrada de
+// más, que en el único agente con escritura del catálogo es justo el riesgo.
+func clavesConAccion(bloque, accion string) []string {
+	var out []string
+	for _, l := range strings.Split(bloque, "\n") {
+		clave, valor, ok := strings.Cut(strings.TrimSpace(l), ":")
+		if !ok || strings.TrimSpace(valor) != accion {
+			continue
+		}
+		out = append(out, strings.Trim(clave, `"`))
+	}
+	return out
+}
+
+// ausenciaRatificada son los agentes que a propósito NO llevan variante de OpenCode, con la
+// razón. DOMAINSERV-206 entró con el template de Claude Code y sin la variante que su
+// aceptación pide, y nada falló: la paridad no se puede dejar en que el próximo se acuerde.
+var ausenciaRatificada = map[string]string{
+	// su guard es un hook PreToolUse y en OpenCode los hooks son plugins JS GLOBALES, no por
+	// agente, así que su restricción no es expresable ahí
+	"git-archaeology": "guard de hook no expresable por agente",
+}
+
+func TestAgentCatalog_ParidadDeVariantes_TodaAusenciaEstaRatificada(t *testing.T) {
+	cat, err := agentCatalog()
+	if err != nil {
+		t.Fatalf("agentCatalog: %v", err)
+	}
+
+	for _, a := range cat {
+		razon, ratificada := ausenciaRatificada[a.slug]
+		if len(a.opencode) == 0 && !ratificada {
+			t.Errorf("%s no trae %s y la ausencia no está ratificada: se distribuye solo a Claude Code sin que nadie lo haya decidido", a.slug, varianteOpencode)
+		}
+		if len(a.opencode) != 0 && ratificada {
+			t.Errorf("%s trae %s pero figura como ausencia ratificada (%s): la ratificación quedó obsoleta", a.slug, varianteOpencode, razon)
+		}
+		if len(a.claude) == 0 {
+			t.Errorf("%s no trae su template de Claude Code", a.slug)
+		}
 	}
 }
 

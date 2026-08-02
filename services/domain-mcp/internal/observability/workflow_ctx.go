@@ -84,6 +84,28 @@ func NewWorkflowID() uuid.UUID {
 	return id
 }
 
+// WorkflowNameFlowRun es el nombre canonico de los workflows que nacen de una
+// corrida del orquestador SDD.
+const WorkflowNameFlowRun = "orchestrator_flow"
+
+// WithWorkflowFromFlowRun ata el ctx al workflow de una corrida del
+// orquestador: el workflow_id ES el flow_run_id, asi que todas las tool calls
+// que declaran la misma corrida caen en la misma fila de `workflows` sin
+// persistir un id aparte ni depender de que el cliente mande un header.
+//
+// Sin flow_run_id valido el ctx vuelve intacto: inventar un id por invocacion
+// era la fabrica de filas basura que corto DOMAINSERV-189.
+func WithWorkflowFromFlowRun(ctx context.Context, flowRunID string) context.Context {
+	if WorkflowIDFromContext(ctx) != uuid.Nil {
+		return ctx
+	}
+	id, err := uuid.Parse(flowRunID)
+	if err != nil || id == uuid.Nil {
+		return ctx
+	}
+	return WithWorkflowName(WithWorkflowID(ctx, id), WorkflowNameFlowRun)
+}
+
 // EnsureWorkflowID chequea el ctx: si no tiene workflow_id, genera uno,
 // lo setea, y devuelve el ctx actualizado + el id. Uso tipico en handlers:
 //

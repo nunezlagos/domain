@@ -8,6 +8,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
 	"nunezlagos/domain/internal/auth/apikey"
+	"nunezlagos/domain/internal/observability"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
@@ -536,10 +537,23 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 	return []mcpgo.ServerTool{
 		{Tool: toolOrchestrate(), Handler: wrap.Wrap("domain_orchestrate", h.handleOrchestrate)},
 		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
-		{Tool: toolOrchestrateConfirm(), Handler: wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm)},
-		{Tool: toolFlowStatus(), Handler: wrap.Wrap("domain_flow_status", h.handleFlowStatus)},
-		{Tool: toolFlowCancel(), Handler: wrap.Wrap("domain_flow_cancel", h.handleFlowCancel)},
-		{Tool: toolFlowGrantToken(), Handler: wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken)},
+		{Tool: toolOrchestrateConfirm(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm))},
+		{Tool: toolFlowStatus(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_status", h.handleFlowStatus))},
+		{Tool: toolFlowCancel(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_cancel", h.handleFlowCancel))},
+		{Tool: toolFlowGrantToken(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken))},
 		{Tool: toolFlowValidateToken(), Handler: wrap.Wrap("domain_flow_validate_token", h.handleFlowValidateToken)},
+	}
+}
+
+// conWorkflowDeLaCorrida es el PRODUCTOR de workflow_id: mete en el ctx el
+// flow_run_id que el tool declara en sus args, para que todas las tool calls de
+// la misma corrida se acumulen en una unica fila de `workflows`.
+//
+// Envuelve POR FUERA del ResilientWrapper a proposito: el hook de metricas que
+// dispara el wrapper (y con el, observability.LogToolInvocation) lee el ctx que
+// Wrap recibio, no el que ve el handler adentro.
+func conWorkflowDeLaCorrida(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return h(observability.WithWorkflowFromFlowRun(ctx, req.GetString("flow_run_id", "")), req)
 	}
 }

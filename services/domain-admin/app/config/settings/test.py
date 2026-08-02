@@ -23,6 +23,10 @@ from .base import *  # noqa: F401,F403
 
 TEST_RUNNER = "core.tests.runner.ManagedModelTestRunner"
 
+# base.py dejo de usar ["*"] (DOMAINSERV-204) y el client de la suite pega a
+# http://testserver/. Explicito para no depender de que el runner lo agregue.
+ALLOWED_HOSTS = ["testserver", "localhost"]
+
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 

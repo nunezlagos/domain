@@ -24,6 +24,22 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@admin.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?definí ADMIN_PASSWORD en el .env — install.sh la genera}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?definí DJANGO_SECRET_KEY en el .env — install.sh la genera}
+      # DOMAINSERV-204: hardening de sesión. Los defaults viven ACÁ y no en el
+      # .env.example porque install.sh, sobre un .env que ya existe, solo
+      # re-siembra el array CREDS: una variable nueva no secreta NUNCA llega al
+      # .env de prod, así que el default del compose es el único valor que corre
+      # en el VPS.
+      #
+      # localhost es obligatorio en ALLOWED_HOSTS: el healthcheck de abajo pega a
+      # http://localhost/ y sin ese host Django responde 400 y el container queda
+      # unhealthy para siempre.
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-13.140.183.236,localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://13.140.183.236,http://localhost}
+      # Quedan en 0 a propósito: el panel se sirve por http en el bloque :80 del
+      # Caddyfile y una cookie Secure sobre http no vuelve nunca. Se prenden en el
+      # mismo cambio que ponga TLS en el origen, no antes (criterio 2 del ticket).
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-0}
+      CSRF_COOKIE_SECURE: ${CSRF_COOKIE_SECURE:-0}
       # HU-48.1: conexión a Postgres compartido (mismas vars que domain-mcp).
       POSTGRES_DB: ${POSTGRES_DB:-domain}
       DB_APP_USER: ${POSTGRES_DB_USER:-app_user}

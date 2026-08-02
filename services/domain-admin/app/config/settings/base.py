@@ -39,7 +39,19 @@ elif not SECRET_KEY or SECRET_KEY in ("CHANGE_ME", _CLAVE_PUBLICADA):
     )
 
 DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
-ALLOWED_HOSTS = ["*"]
+
+
+def _lista_separada_por_comas(crudo, default):
+    valores = [item.strip() for item in crudo.split(",") if item.strip()]
+    return valores or default
+
+
+# El bloque `:80` del Caddyfile no matchea por Host, asi que esta lista es la
+# UNICA validacion de Host del panel: con ["*"] no habia ninguna. Los hosts del
+# deployment los pasa el compose de domain-admin (DOMAINSERV-204).
+ALLOWED_HOSTS = _lista_separada_por_comas(
+    os.environ.get("DJANGO_ALLOWED_HOSTS", ""), ["localhost"]
+)
 
 INSTALLED_APPS = [
     "django.contrib.sessions",
@@ -140,11 +152,14 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas
 
+# Prenderlo sin TLS en el origen deja el panel inalcanzable: el browser no
+# devuelve una cookie Secure sobre http. Va junto al de sesion, no antes.
+CSRF_COOKIE_SECURE = os.environ.get("CSRF_COOKIE_SECURE", "0") == "1"
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://13.140.183.236",
-    "http://localhost",
-]
+
+CSRF_TRUSTED_ORIGINS = _lista_separada_por_comas(
+    os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", ""), ["http://localhost"]
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -257,9 +257,9 @@ chmod 600 "$ENV_FILE"
 
 # === STEP 5: Generate certs ===
 log "5/9  Generando certs autofirmados..."
-mkdir -p "$INSTALL_DIR/certs/postgres" "$INSTALL_DIR/certs/minio"
-# Los compose files usan paths relativos tipo ../certs/minio que resuelven
-# a /opt/services/services/certs/minio. Symlink para que apunte a los certs
+mkdir -p "$INSTALL_DIR/certs/postgres"
+# Los compose files usan paths relativos tipo ../certs/postgres que resuelven
+# a /opt/services/services/certs/postgres. Symlink para que apunte a los certs
 # reales en /opt/services/certs/. Si existe un directorio viejo (de deploys
 # previos, posiblemente root-owned), lo borramos con sudo.
 if [[ -d "$INSTALL_DIR/services/certs" && ! -L "$INSTALL_DIR/services/certs" ]]; then
@@ -274,15 +274,6 @@ if [[ ! -f "$INSTALL_DIR/certs/postgres/server.crt" ]]; then
   ok "Cert postgres generado"
 else
   ok "Cert postgres preservado"
-fi
-if [[ ! -f "$INSTALL_DIR/certs/minio/public.crt" ]]; then
-  openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-    -keyout "$INSTALL_DIR/certs/minio/private.key" \
-    -out "$INSTALL_DIR/certs/minio/public.crt" \
-    -subj "/CN=minio" 2>/dev/null
-  ok "Cert minio generado"
-else
-  ok "Cert minio preservado"
 fi
 
 # === STEP 6: Build + Up ===

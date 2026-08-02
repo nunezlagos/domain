@@ -331,6 +331,11 @@ func (h *projectIndexHandlers) handleProjectIndexSubmit(ctx context.Context, req
 	).Scan(&projectID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("run not found: %v", err)), nil
 	}
+	// el submit escribe knowledge_docs del proyecto del run: sin el GUC seteado, el WITH
+	// CHECK del RLS de la parte B rechaza el INSERT y el repo deja de poder indexarse
+	if err := setProjectScope(ctx, projectID); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("scope de proyecto: %v", err)), nil
+	}
 
 	policiesCreated, knowledgeCreated, ignored := 0, 0, 0
 	ignoredPaths := []string{}

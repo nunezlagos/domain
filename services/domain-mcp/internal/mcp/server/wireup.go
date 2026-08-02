@@ -118,6 +118,69 @@ func withOrgTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 	}
 }
 
+// setProjectScope setea app.current_project_id en la tx del ctx. El GUC es LOCAL: fuera
+// de una tx se pierde con el statement, así que sin tx esto no puede "casi" funcionar —
+// falla y avisa (DOMAINSERV-185).
+func setProjectScope(ctx context.Context, projectID uuid.UUID) error {
+	tx := txctx.TxFromContext(ctx)
+	if tx == nil {
+		return errors.New("sin transacción en el contexto: el GUC de proyecto no sobrevive fuera de una tx")
+	}
+	if projectID == uuid.Nil {
+		return errors.New("project_id vacío: el GUC quedaría en NULL y el RLS devolvería 0 filas sin error")
+	}
+	_, err := tx.Exec(ctx, `SELECT set_config('app.current_project_id', $1, true)`, projectID.String())
+	if err != nil {
+		return fmt.Errorf("set_config project: %w", err)
+	}
+	return nil
+}
+
+// projectIDConScope resuelve el slug y deja el GUC seteado en el mismo paso. Resolver el
+// projectID sin setear el GUC es la trampa del ticket: el WHERE de la query filtra bien y
+// el RLS devuelve 0 filas igual.
+func (d *Deps) projectIDConScope(ctx context.Context, orgID uuid.UUID, slug string) (uuid.UUID, error) {
+	if d.Projects == nil {
+		return uuid.Nil, errors.New("servicio de projects no configurado")
+	}
+	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("project '%s' not found", slug)
+	}
+	return proj.ID, setProjectScope(ctx, proj.ID)
+}
+
+// resolveProjectScope traduce el project_slug del request al GUC de proyecto. FALLA
+// CERRADO: sin slug o sin proyecto resuelto devuelve error y el handler no corre, porque
+// bajo RLS un GUC vacío no da error — da 0 filas, indistinguible de "no hay nada".
+func resolveProjectScope(ctx context.Context, d *Deps, req mcp.CallToolRequest) error {
+	if d.Principal == nil {
+		return errors.New("sin principal: no hay organización contra la cual resolver el project_slug")
+	}
+	args := req.GetArguments()
+	slug, _ := args["project_slug"].(string)
+	if slug == "" {
+		return errors.New("project_slug es requerido: sin él no hay eje de scope y el RLS de knowledge devuelve 0 filas sin error")
+	}
+	orgID, err := uuid.Parse(d.Principal.OrganizationID)
+	if err != nil {
+		return fmt.Errorf("organization_id del principal inválido: %w", err)
+	}
+	_, err = d.projectIDConScope(ctx, orgID, slug)
+	return err
+}
+
+// withProjectTxHandler suma el GUC de proyecto sobre el wireup de organización: delega la
+// tx y el commit en withOrgTxHandler y, antes de invocar el handler, resuelve el scope.
+func withProjectTxHandler(d *Deps, h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+	return withOrgTxHandler(d, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if err := resolveProjectScope(ctx, d, req); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return h(ctx, req)
+	})
+}
+
 // truncateSQL compacta whitespace en SQL para mensajes de error. SQL real
 // rara vez excede 1KB; el cap de 240 chars es suficiente para reconocer
 // la query en logs y dispara el ojo a "wheres" o joins.

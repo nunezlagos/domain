@@ -27,7 +27,12 @@ import (
 	"nunezlagos/domain/internal/llm"
 	knowsvc "nunezlagos/domain/internal/service/knowledge"
 	obssvc "nunezlagos/domain/internal/service/observation"
+	"nunezlagos/domain/internal/store/txctx"
 )
+
+// sqlScopeDeProyecto es el GUC que lee el RLS de knowledge (DOMAINSERV-185). Es LOCAL:
+// solo vale dentro de la tx donde se ejecuta.
+const sqlScopeDeProyecto = `SELECT set_config('app.current_project_id', $1, true)`
 
 // ErrNoProjectForOrg indica que la organización no tiene projects seedeados.
 var ErrNoProjectForOrg = errors.New("analysis: no projects found for organization — seed one first")
@@ -75,6 +80,35 @@ type Result struct {
 	Body           string
 }
 
+// guardarDocConScope escribe el knowledge_doc con app.current_project_id seteado. La tx
+// la abre acá porque RunAnalysis se invoca desde domain_prompt, que hoy se registra sin
+// wireup RLS: el GUC es LOCAL y fuera de una tx no sobrevive al statement
+// (DOMAINSERV-185).
+func (s *Service) guardarDocConScope(ctx context.Context, in knowsvc.SaveInput) (*knowsvc.Document, error) {
+	// si mañana domain_prompt pasa a registrarse con wireup, abrir otra tx acá sería una
+	// segunda conexión compitiendo con la primera: se reusa la del ctx y commitea el wrapper
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		if _, err := tx.Exec(ctx, sqlScopeDeProyecto, in.ProjectID.String()); err != nil {
+			return nil, fmt.Errorf("set_config project: %w", err)
+		}
+		doc, _, err := s.Knowledge.Save(ctx, in)
+		return doc, err
+	}
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, sqlScopeDeProyecto, in.ProjectID.String()); err != nil {
+		return nil, fmt.Errorf("set_config project: %w", err)
+	}
+	doc, _, err := s.Knowledge.Save(txctx.WithTxContext(ctx, tx), in)
+	if err != nil {
+		return nil, err
+	}
+	return doc, tx.Commit(ctx)
+}
+
 // RunAnalysis ejecuta el mini-pipeline: explora el prompt con el LLM y
 // persiste el resultado como knowledge_doc + observation indexable.
 func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
@@ -94,7 +128,7 @@ func (s *Service) RunAnalysis(ctx context.Context, in Input) (*Result, error) {
 
 	title := inferTitle(content, in.RawText)
 
-	doc, _, err := s.Knowledge.Save(ctx, knowsvc.SaveInput{
+	doc, err := s.guardarDocConScope(ctx, knowsvc.SaveInput{
 		OrganizationID: in.OrganizationID,
 		ProjectID:      projectID,
 		CreatedBy:      &in.UserID,

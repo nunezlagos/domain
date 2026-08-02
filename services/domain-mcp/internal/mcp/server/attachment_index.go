@@ -50,12 +50,12 @@ func (d *Deps) handleAttachmentIndex(ctx context.Context, req mcp.CallToolReques
 	// una relación adjunto→proyecto que validar. Lo que se valida es que ambos existan.
 	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
 	userID, _ := uuid.Parse(d.Principal.UserID)
-	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	projID, err := d.projectIDConScope(ctx, orgID, slug)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 	doc, chunks, err := d.Knowledge.Save(ctx, knowsvc.SaveInput{
-		OrganizationID: orgID, ProjectID: proj.ID, CreatedBy: &userID,
+		OrganizationID: orgID, ProjectID: projID, CreatedBy: &userID,
 		Title: title, Body: text, Source: "attachment",
 		Tags:     []string{"attachment"},
 		Metadata: map[string]any{"attachment_id": attID.String()},

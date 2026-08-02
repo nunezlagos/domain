@@ -210,6 +210,24 @@ func toSearchResultBM25(r knowledgedb.SearchBm25Row) SearchResult {
 	}
 }
 
+// escrituraDeSave elige dónde escribe Save. Si el ctx ya trae la tx del wireup —la que
+// lleva app.current_project_id— se escribe DENTRO y el commit lo hace el wrapper: abrir
+// una tx propia mandaría el INSERT a otra conexión, sin GUC, y el WITH CHECK del RLS de
+// la parte B lo rechazaría (DOMAINSERV-185). Sin tx en el ctx, el camino de siempre.
+func (s *Service) escrituraDeSave(ctx context.Context) (*knowledgedb.Queries, func() error, func(), error) {
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		return knowledgedb.New(tx), func() error { return nil }, func() {}, nil
+	}
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("begin tx: %w", err)
+	}
+	return knowledgedb.New(tx),
+		func() error { return tx.Commit(ctx) },
+		func() { _ = tx.Rollback(ctx) },
+		nil
+}
+
 func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return nil, nil, ErrTitleRequired
@@ -237,13 +255,11 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 		return nil, nil, fmt.Errorf("embed chunks: %w", err)
 	}
 
-	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	q, commit, release, err := s.escrituraDeSave(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("begin tx: %w", err)
+		return nil, nil, err
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := knowledgedb.New(tx)
+	defer release()
 
 	var srcURL *string
 	if in.SourceURL != "" {
@@ -283,7 +299,7 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 		chunks = append(chunks, toChunk(chRow))
 	}
 
-	if err := tx.Commit(ctx); err != nil {
+	if err := commit(); err != nil {
 		return nil, nil, fmt.Errorf("commit: %w", err)
 	}
 

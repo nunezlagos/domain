@@ -233,6 +233,11 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 	rls := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, h)
 	}
+	// para las tools cuyo eje de RLS es el proyecto y no la organización: además de la tx
+	// deja seteado app.current_project_id desde el project_slug del request
+	rlsProyecto := func(h mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
+		return withProjectTxHandler(&deps, h)
+	}
 	tools := []mcpgo.ServerTool{
 		{Tool: toolMemSave(), Handler: wrap.Wrap("domain_mem_save", rls(deps.handleMemSave))},
 		{Tool: toolMemSearch(), Handler: wrap.Wrap("domain_mem_search", rls(deps.handleMemSearch))},
@@ -245,10 +250,10 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolContext(), Handler: wrap.Wrap("domain_context_snapshot", rls(deps.handleContext))},
 		{Tool: toolTimeline(), Handler: wrap.Wrap("domain_timeline", rls(deps.handleTimeline))},
 		{Tool: toolGlobalSearch(), Handler: wrap.Wrap("domain_search_global", rls(deps.handleGlobalSearch))},
-		{Tool: toolKnowledgeSave(), Handler: wrap.Wrap("domain_knowledge_save", deps.handleKnowledgeSave)},
+		{Tool: toolKnowledgeSave(), Handler: wrap.Wrap("domain_knowledge_save", rlsProyecto(deps.handleKnowledgeSave))},
 		{Tool: toolAttachmentIndex(), Handler: wrap.Wrap("domain_attachment_index", rls(deps.handleAttachmentIndex))},
-		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", deps.handleKnowledgeSearch)},
-		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", deps.handleKnowledgeGet)},
+		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", rlsProyecto(deps.handleKnowledgeSearch))},
+		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", rlsProyecto(deps.handleKnowledgeGet))},
 		{Tool: toolSkillList(), Handler: wrap.Wrap("domain_skill_list", deps.handleSkillList)},
 		{Tool: toolSkillSearch(), Handler: wrap.Wrap("domain_skill_search", deps.handleSkillSearch)},
 		{Tool: toolSkillGet(), Handler: wrap.Wrap("domain_skill_get", deps.handleSkillGet)},

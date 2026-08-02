@@ -51,6 +51,26 @@ func TestAgentTemplatesSeedVersion_CubreLosAgentesDe206Y155(t *testing.T) {
 		"206 y 155 comparten UN solo bump a 23; sin él el re-seed se skippea en silencio")
 }
 
+// DOMAINSERV-217/219/155: los prompts seedeados de sdd-review y sdd-judge instruyen
+// el contrato de las tools verify, que cambió (project_slug requerido, evidencia de
+// sabotaje para cerrar un test en pass), y el plan de sdd-verify ahora nombra
+// gherkin-verify. Los tres viajan en el catálogo: sin bump el seeder se skippea y el
+// contrato VIEJO sigue gobernando en BD, con el síntoma indistinguible del éxito.
+func TestAgentTemplatesSeedVersion_CubreElContratoNuevoDeVerify(t *testing.T) {
+	porSlug := map[string]string{}
+	for _, tpl := range AgentTemplateCatalog() {
+		porSlug[tpl.Slug] = tpl.SystemPrompt
+	}
+	require.Contains(t, porSlug["sdd-review"], "domain_verify_update_item(verification_id, project_slug",
+		"el prompt del review debe pasar project_slug: sin él la tool falla")
+	require.Contains(t, porSlug["sdd-judge"], "sabotaje_aplicado",
+		"el judge es el dueño del paso 4 del ciclo TDD: debe reportar la evidencia que el server exige")
+	require.Contains(t, phases.SubagentPlans()["sdd-verify"], "gherkin-verify",
+		"el plan de sdd-verify debe delegar los lotes en el agente del catálogo")
+	require.GreaterOrEqual(t, agentTemplatesSeedVersion, 24,
+		"217, 219 y 155 comparten UN bump a 24; sin él el prompt con el contrato viejo sigue en BD")
+}
+
 // DOMAINSERV-161: el fan-out de domain_policy_get en sdd-review vive en el prompt
 // seedeado. seeds.go skippea el seeder si applied_version >= Version(), así que sin bump
 // el prompt VIEJO sigue gobernando el gate en producción — y el síntoma es

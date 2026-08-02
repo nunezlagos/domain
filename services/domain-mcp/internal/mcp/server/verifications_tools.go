@@ -86,10 +86,14 @@ func toolVerifyUpdateItem() mcp.Tool {
 	return mcp.NewTool("domain_verify_update_item",
 		mcp.WithDescription("Reporta el resultado de UN item de un verify checkpoint. Llamar tras correr el comando con tu tool nativa Bash. status: pass | fail | skipped."),
 		mcp.WithString("verification_id", mcp.Description("UUID del checkpoint"), mcp.Required()),
+		mcp.WithString("project_slug", mcp.Description("Proyecto dueño del checkpoint (el mismo que pasaste en verify_start). Requerido: un checkpoint de otro proyecto es inaccesible."), mcp.Required()),
 		mcp.WithString("label", mcp.Description("Label exacto del item (el que pasaste en verify_start)"), mcp.Required()),
 		mcp.WithString("status", mcp.Description("pass | fail | skipped"), mcp.Required()),
 		mcp.WithString("output", mcp.Description("Output relevante (último ~500 chars, no todo el log)")),
 		mcp.WithNumber("duration_ms", mcp.Description("Tiempo de ejecución en ms (opcional)")),
+		mcp.WithString("sabotaje_aplicado", mcp.Description("Qué invariante rompiste para probar que el test puede fallar. OBLIGATORIO en kind='test' con status='pass'.")),
+		mcp.WithString("tests_en_rojo", mcp.Description("El mensaje de fallo REAL que devolvió el test con el sabotaje aplicado, textual. OBLIGATORIO en kind='test' con status='pass'.")),
+		mcp.WithBoolean("restaurado", mcp.Description("true si revertiste el sabotaje y el código quedó como estaba. OBLIGATORIO en kind='test' con status='pass'.")),
 	)
 }
 
@@ -97,6 +101,7 @@ func toolVerifyComplete() mcp.Tool {
 	return mcp.NewTool("domain_verify_complete",
 		mcp.WithDescription("Cierra el verify checkpoint. Server calcula status final automáticamente: si todos los items son 'pass' → passed; si algún item 'fail' → failed; si mezcla pass + skipped → partial."),
 		mcp.WithString("verification_id", mcp.Description("UUID del checkpoint"), mcp.Required()),
+		mcp.WithString("project_slug", mcp.Description("Proyecto dueño del checkpoint (el mismo que pasaste en verify_start). Requerido: un checkpoint de otro proyecto es inaccesible."), mcp.Required()),
 	)
 }
 
@@ -179,6 +184,27 @@ func (h *verificationsHandlers) handleVerifyStart(ctx context.Context, req mcp.C
 	})
 }
 
+// scopeProjectID resuelve el proyecto dueño del checkpoint. DOMAINSERV-217:
+// update_item y complete resolvían por UUID solo, y la RLS de tdd_verifications
+// está deshabilitada desde la migración 000132, así que este predicado es la única
+// barrera entre proyectos. Fail-closed sin project_slug: escribir en el proyecto
+// equivocado es silencioso e irreversible.
+func (h *verificationsHandlers) scopeProjectID(ctx context.Context, args map[string]any) (uuid.UUID, *mcp.CallToolResult) {
+	if h.projects == nil {
+		return uuid.Nil, mcp.NewToolResultError("projects service not configured")
+	}
+	slug := strings.TrimSpace(asString(args["project_slug"]))
+	if slug == "" {
+		return uuid.Nil, mcp.NewToolResultError("project_slug requerido")
+	}
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	proj, err := h.projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return uuid.Nil, mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug))
+	}
+	return proj.ID, nil
+}
+
 func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal"), nil
@@ -206,6 +232,12 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 		durationMs = int(v)
 	}
 
+	// el proyecto se resuelve ANTES del Begin: un slug inexistente no deja transacción abierta
+	projID, errRes := h.scopeProjectID(ctx, args)
+	if errRes != nil {
+		return errRes, nil
+	}
+
 	// El read-modify-write del JSONB va en UNA transacción con FOR UPDATE: dos
 	// update_item concurrentes sobre labels distintos se pisaban el items entero.
 	tx, err := h.pool.Begin(ctx)
@@ -214,12 +246,19 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// el mismatch de proyecto NO se distingue de un id inexistente: distinguirlos
+	// filtraría la existencia de checkpoints ajenos
 	var itemsRaw []byte
+	var kind string
 	if err := tx.QueryRow(ctx,
-		`SELECT items FROM tdd_verifications WHERE id = $1 FOR UPDATE`,
-		id,
-	).Scan(&itemsRaw); err != nil {
+		`SELECT kind, items FROM tdd_verifications
+		   WHERE id = $1 AND project_id = $2 FOR UPDATE`,
+		id, projID,
+	).Scan(&kind, &itemsRaw); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verification not found: %v", err)), nil
+	}
+	if err := validarSabotaje(kind, status, args); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 	var items []map[string]any
 	if err := json.Unmarshal(itemsRaw, &items); err != nil {
@@ -235,6 +274,9 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 			if durationMs > 0 {
 				items[i]["duration_ms"] = durationMs
 			}
+			for campo, valor := range camposDeSabotaje(args) {
+				items[i][campo] = valor
+			}
 			found = true
 			break
 		}
@@ -244,8 +286,9 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 	}
 	newRaw, _ := json.Marshal(items)
 	if _, err := tx.Exec(ctx,
-		`UPDATE tdd_verifications SET items = $2 WHERE id = $1`,
-		id, newRaw,
+		`UPDATE tdd_verifications SET items = $2
+		   WHERE id = $1 AND project_id = $3`,
+		id, newRaw, projID,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("update failed: %v", err)), nil
 	}
@@ -257,6 +300,47 @@ func (h *verificationsHandlers) handleVerifyUpdateItem(ctx context.Context, req 
 		"label":           label,
 		"status":          status,
 	})
+}
+
+// validarSabotaje exige la evidencia del paso 4 del ciclo TDD para cerrar un item
+// de test en verde. DOMAINSERV-219: vivía como prosa en el template sdd-judge y
+// nadie la verificaba, así que un test "always green" cerraba igual. Fuera del par
+// (test, pass) no se exige nada: un fail o un policy_review no sabotean nada.
+func validarSabotaje(kind, status string, args map[string]any) error {
+	if kind != "test" || status != "pass" {
+		return nil
+	}
+	var faltan []string
+	if strings.TrimSpace(asString(args["sabotaje_aplicado"])) == "" {
+		faltan = append(faltan, "sabotaje_aplicado")
+	}
+	if strings.TrimSpace(asString(args["tests_en_rojo"])) == "" {
+		faltan = append(faltan, "tests_en_rojo")
+	}
+	if restaurado, _ := args["restaurado"].(bool); !restaurado {
+		faltan = append(faltan, "restaurado")
+	}
+	if len(faltan) == 0 {
+		return nil
+	}
+	return fmt.Errorf("un item kind='test' no cierra en 'pass' sin evidencia de sabotaje: faltan %s. "+
+		"Rompé la invariante que el test valida, pegá el fallo REAL que devolvió, y restaurá el código",
+		strings.Join(faltan, ", "))
+}
+
+// camposDeSabotaje devuelve la evidencia a persistir en el item. Se guarda cuando
+// viene, incluso si el kind no la exige: es audit, no solo gate.
+func camposDeSabotaje(args map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, campo := range []string{"sabotaje_aplicado", "tests_en_rojo"} {
+		if v := strings.TrimSpace(asString(args[campo])); v != "" {
+			out[campo] = v
+		}
+	}
+	if restaurado, ok := args["restaurado"].(bool); ok {
+		out["restaurado"] = restaurado
+	}
+	return out
 }
 
 func (h *verificationsHandlers) handleVerifyComplete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -273,10 +357,16 @@ func (h *verificationsHandlers) handleVerifyComplete(ctx context.Context, req mc
 		return mcp.NewToolResultError("verification_id inválido"), nil
 	}
 
+	projID, errRes := h.scopeProjectID(ctx, args)
+	if errRes != nil {
+		return errRes, nil
+	}
+
 	var itemsRaw []byte
 	if err := h.q(ctx).QueryRow(ctx,
-		`SELECT items FROM tdd_verifications WHERE id = $1`,
-		id,
+		`SELECT items FROM tdd_verifications
+		   WHERE id = $1 AND project_id = $2`,
+		id, projID,
 	).Scan(&itemsRaw); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("verification not found: %v", err)), nil
 	}
@@ -313,8 +403,8 @@ func (h *verificationsHandlers) handleVerifyComplete(ctx context.Context, req mc
 
 	if _, err := h.q(ctx).Exec(ctx,
 		`UPDATE tdd_verifications SET status = $2, completed_at = NOW()
-		   WHERE id = $1`,
-		id, finalStatus,
+		   WHERE id = $1 AND project_id = $3`,
+		id, finalStatus, projID,
 	); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("complete failed: %v", err)), nil
 	}

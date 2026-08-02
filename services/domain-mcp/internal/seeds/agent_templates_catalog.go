@@ -674,6 +674,12 @@ Por cada test del plan TDD:
 4. Restaurar el código original (revert del sabotaje).
 5. Persistir sabotage_record vía domain_mem_save:
      {test_name, sabotage_applied, test_failed_as_expected}
+   Y si el test tiene item en un checkpoint kind="test", cerrarlo con
+   domain_verify_update_item(verification_id, project_slug, label, status="pass",
+     sabotaje_aplicado=<qué invariante rompiste>,
+     tests_en_rojo=<el fallo REAL, textual>, restaurado=true).
+   El server RECHAZA un item de test en "pass" sin esos tres campos: sin ellos
+   no hay evidencia de que el test pueda fallar.
 
 Post-sabotaje, verificar audit checklist (policy audit-tasks-checklist):
 6. Ningún archivo nuevo supera 150 líneas de código.
@@ -875,9 +881,11 @@ proyecto. Eres read-only: NO modificas código.
      items=[{label:<policy_or_skill_slug>, status:"pending"}, ...])
 3. Contrasta CADA regla contra el diff de los archivos modificados por
    sdd-apply. Reporta cada item:
-   domain_verify_update_item(verification_id, label, status=pass|fail|skipped,
-     output=<evidencia file:line>)
-4. Cierra: domain_verify_complete(verification_id).
+   domain_verify_update_item(verification_id, project_slug, label,
+     status=pass|fail|skipped, output=<evidencia file:line>)
+   project_slug es REQUERIDO en update_item y en complete: sin él el checkpoint
+   no se resuelve y la llamada falla.
+4. Cierra: domain_verify_complete(verification_id, project_slug).
 5. Reporta vía domain_orchestrate_phase_result el JSON de salida.
 </workflow>
 
@@ -1114,7 +1122,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 23 // 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 24 // 24: verify_update_item/_complete exigen project_slug y un item kind='test' no cierra en 'pass' sin evidencia de sabotaje (DOMAINSERV-217 y 219), y el plan de sdd-verify delega los lotes en gherkin-verify (DOMAINSERV-155); los prompts seedeados que instruyen esas tools quedarían con el contrato viejo sin el bump; 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

@@ -13,7 +13,9 @@ import (
 
 // verifySubagentPlan estaba inline en el Output, así que no se podía exponer en
 // SubagentPlans() y el seeder nunca lo llevaba a agent_templates.metadata (DOMAINSERV-208).
-const verifySubagentPlan = "Agrupa los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y valida cada lote en un subagente paralelo. Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Combina los lotes; un escenario failed en cualquier lote = failed global."
+// DOMAINSERV-155: gherkin-verify estaba en CatalogAgents y ninguna fase lo
+// nombraba, así que el agente que install-user distribuye no lo pedía nadie.
+const verifySubagentPlan = "Agrupa los escenarios Gherkin del issue en lotes INDEPENDIENTES (sin estado compartido) y valida cada lote en un subagente paralelo: delega cada lote en el agente gherkin-verify (" + MarcaFallback + " usa un subagente read-only con la salida de los tests en el prompt de delegación). Cada subagente reporta scenarios_passed/scenarios_failed de su lote con evidencia. Combina los lotes; un escenario failed en cualquier lote = failed global. El checkpoint lo escribe el hilo principal: los subagentes no tienen domain_verify_update_item."
 
 type sddVerifyHandler struct{}
 
@@ -50,6 +52,9 @@ func (h *sddVerifyHandler) Build(_ context.Context, in Input) (*Output, error) {
 	}
 	fmt.Fprintln(&b, "Valida los escenarios Gherkin del issue.md. NO modifiques código.")
 	fmt.Fprintln(&b, "Corre la verificación con domain_verify_start → domain_verify_update_item (por escenario) → domain_verify_complete.")
+	fmt.Fprintln(&b, "Las tres exigen project_slug: sin él el checkpoint no se resuelve (DOMAINSERV-217).")
+	fmt.Fprintln(&b, "Un item de kind='test' NO cierra en 'pass' sin sabotaje_aplicado + tests_en_rojo (el")
+	fmt.Fprintln(&b, "fallo textual) + restaurado=true: un test que no puede fallar no es un test.")
 	fmt.Fprintln(&b, "Al terminar, llama a domain_orchestrate_phase_result con el JSON descrito y tool_calls=[las tools que invocaste].")
 	return &Output{
 		AgentTemplateSlug: "sdd-verify",

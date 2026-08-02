@@ -141,8 +141,13 @@ func TestMCP_VerifyUpdateItem_TresLabelsEnParalelo_NoSePisan(t *testing.T) {
 			defer wg.Done()
 			callVerifTool(t, f.srv, "domain_verify_update_item", map[string]any{
 				"verification_id": f.verificationID,
+				"project_slug":    "demo",
 				"label":           l,
 				"status":          "pass",
+				// kind='test' + pass exige evidencia de sabotaje (DOMAINSERV-219)
+				"sabotaje_aplicado": "invertí el predicado del guard",
+				"tests_en_rojo":     "FAIL: el label se perdió",
+				"restaurado":        true,
 			})
 		}(label)
 	}
@@ -161,6 +166,7 @@ func TestMCP_VerifyUpdateItem_UnLabel_SoloEseCambia(t *testing.T) {
 
 	callVerifTool(t, f.srv, "domain_verify_update_item", map[string]any{
 		"verification_id": f.verificationID,
+		"project_slug":    "demo",
 		"label":           "item-b",
 		"status":          "fail",
 		"output":          "detalle del fallo",

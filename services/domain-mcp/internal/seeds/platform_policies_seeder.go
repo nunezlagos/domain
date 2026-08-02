@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 27 } // 27: reportar-consumo-de-memoria — el protocolo de cuándo llamar domain_mem_used, creada antes por MCP y ausente del catálogo (DOMAINSERV-145); 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 28 } // 28: premisas-medidas-no-inferidas + agent-protocol gana la sección de FAN-OUT — un solo bump para los dos, porque 220 y 158 tocan el mismo seeder y el segundo en deployar encontraría el número consumido y skippearía en silencio (DOMAINSERV-220/158); 27: reportar-consumo-de-memoria — el protocolo de cuándo llamar domain_mem_used, creada antes por MCP y ausente del catálogo (DOMAINSERV-145); 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -568,6 +568,32 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"sesiones futuras: prompt-injection con persistencia. Es la única de estas reglas que no\n" +
 				"admite excepción por conveniencia, y queda escrita antes de que exista el primer agente\n" +
 				"web —no después.\n",
+		},
+		{
+			Slug:       "premisas-medidas-no-inferidas",
+			Name:       "Separar lo medido de lo inferido, y leer el schema efectivo",
+			Kind:       "convention",
+			SourceFile: "AGENTS.md",
+			BodyMD: "Una afirmación factual en un ticket, un CHANGELOG o un análisis se escribe MEDIDA o\n" +
+				"declarada como HIPÓTESIS. Nunca las dos con el mismo tono.\n\n" +
+				"- MEDIDO: lleva el comando que se corrió o el `path:línea` que se leyó. Otro puede\n" +
+				"  verificarlo sin repetir el razonamiento.\n" +
+				"- HIPÓTESIS: inferencia razonable sin medición. Va en su propia sección, para que\n" +
+				"  quien retome el trabajo sepa qué re-verificar y qué no.\n\n" +
+				"Registrar contra qué HEAD se midió. El repo se mueve: un ticket de tres días atrás\n" +
+				"puede describir un schema que ya no existe, y la premisa falsa cambia la CLASE de\n" +
+				"esfuerzo — en DOMAINSERV-211 un fix de ~25 líneas quedó rotulado \"cambio de contrato\n" +
+				"de tool\" y se estacionó en backlog con prioridad low.\n\n" +
+				"## El schema no se concluye de un CREATE TABLE\n\n" +
+				"El estado de una columna se lee del schema EFECTIVO, no de la migración que la creó.\n" +
+				"La 000142 dropea toda columna `organization_id` con un bloque `DO` anónimo sobre\n" +
+				"`information_schema.columns`: no nombra ni una tabla, así que un grep por el nombre\n" +
+				"de la tabla no la encuentra. Las de su misma tanda SÍ nombran las suyas (la 000141\n" +
+				"lista 5 `ALTER TABLE`, la 000143 dropea `organizations` por nombre): el problema es\n" +
+				"el recorrido genérico, no la tanda.\n\n" +
+				"Precedente medido el 2026-07-31: de 4 tickets abordados, 3 tenían una afirmación\n" +
+				"factual falsa, y un fix escrito contra `projects.organization_id` falló al ejecutarse\n" +
+				"porque esa columna la había dropeado la 000142. Establecido en DOMAINSERV-220.\n",
 		},
 		{
 			Slug:       "reportar-consumo-de-memoria",

@@ -244,6 +244,26 @@ RESUMEN del resultado (qué cambiaron, archivos, estado), no el detalle crudo
 — usa las skills reduce-token (summarize, diff-summarize) si el output es
 grande. Así ni tú ni los subagentes saturan su ventana de contexto.
 
+FAN-OUT — loteo, agregación, relanzamiento (DOMAINSERV-158). Deja de ser criterio del
+momento:
+- LOTEO: un lote NO comparte estado con otro (la condición que ya emite sdd-verify). El
+  tamaño lo fija la unidad independiente real —un archivo, un escenario, un ticket—, no
+  un número redondo. Lo que no se parte sin estado compartido no se reparte: va un agente.
+- AGREGACIÓN: si dos retornos se contradicen sobre el mismo hecho,
+  no se resuelven por mayoría: se VERIFICA en el hilo. Dos agentes de tier bajo de acuerdo
+  no son evidencia. El mismo hallazgo reportado por dos cuenta una vez.
+- ORDEN: los retornos llegan por orden de finalización, no de lanzamiento. Nada puede
+  depender del orden.
+- RELANZAMIENTO: si fallan 2 de 8 lotes se relanzan esos 2, no los 8. Cada lote se define
+  idempotente y el hilo registra qué lote produjo qué retorno.
+- RETORNO: todo agente distingue vacío real, degradación y truncamiento con marcador
+  explícito (` + "`vacío:`, `degradado:`, `truncado:`" + `). Un vacío que fue una falla
+  convierte el fan-out en falsos negativos silenciosos.
+- CUÁNTOS: sin medición propia todavía. El harness admite 20, pero cada spawn paga cache
+  write y los retornos suman en tu ventana: lanza el mínimo que cubra los lotes.
+- CUÁNDO NO DELEGAR: domain_policy_get(slug="delegar-lecturas-multiples") — incluye el
+  caso en que el detalle ES el entregable.
+
 Fallback: si tu cliente NO soporta subagentes, ejecuta secuencialmente en el
 orden de position. El resultado es el mismo, solo más lento. Nunca paralelices
 tasks de distinto parallel_group ni concerns marcados como dependientes.

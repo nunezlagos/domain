@@ -39,9 +39,6 @@ func TestPlatformPolicies_ReportarConsumoDeMemoria_EstaEnElCatalogo(t *testing.T
 // Sin bump, seeds.go skippea el seeder y la policy nueva no llega a ningún ambiente
 // que ya haya corrido una versión anterior.
 func TestPlatformPoliciesSeedVersion_CubreReportarConsumoDeMemoria(t *testing.T) {
-	b, err := os.ReadFile("platform_policies_seeder.go")
-	require.NoError(t, err)
-
-	require.Contains(t, string(b), "return 27",
-		"sembrar la policy nueva exige bump de PlatformPoliciesSeeder a 27")
+	require.GreaterOrEqual(t, (&PlatformPoliciesSeeder{}).Version(), 27,
+		"sembrar la policy nueva exigió bump de PlatformPoliciesSeeder a 27")
 }

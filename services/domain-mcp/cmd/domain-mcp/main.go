@@ -397,13 +397,6 @@ func main() {
 		}()
 	})
 
-	boolToIntLocal := func(cond bool) int {
-		if cond {
-			return 1
-		}
-		return 0
-	}
-
 	var flowTokenSvc *flowsvc.FlowTokenService
 	if secret := os.Getenv("DOMAIN_FLOW_TOKEN_SECRET"); secret != "" {
 		flowTokenSvc = flowsvc.NewFlowTokenService([]byte(secret))
@@ -450,33 +443,14 @@ func main() {
 		ServerName:       "domain-mcp",
 		ServerVer:        Version,
 		MetricsOnToolCall: func(ctx context.Context, tool, status, errCode, errMsg string, dur float64) {
-			wfID := observability.WorkflowIDFromContext(ctx)
-			invLogger.Log(observability.Invocation{
-				ToolName:     tool,
-				Status:       status,
-				DurationMS:   int(dur * 1000),
-				ErrorCode:    errCode,
-				ErrorMessage: errMsg,
-				WorkflowID:   wfID.String(),
-			})
-			if wfID != uuid.Nil {
-				workflowTracker.Touch(ctx, observability.WorkflowRow{
-					ID:              wfID,
-					Name:            observability.WorkflowNameFromContext(ctx),
-					Status:          observability.WorkflowRunning,
-					LastActivityAt:  time.Now(),
-					TotalToolCalls:  1,
-					TotalErrors:     boolToIntLocal(status == "error"),
-					TotalDurationMS: int64(dur * 1000),
+			observability.LogToolInvocation(ctx, slog.Default(), invLogger, workflowTracker,
+				observability.ToolCall{
+					Tool:         tool,
+					Status:       status,
+					ErrorCode:    errCode,
+					ErrorMessage: errMsg,
+					DurationMS:   int64(dur * 1000),
 				})
-			}
-			slog.Info("tool invocation",
-				slog.String("tool", tool),
-				slog.String("status", status),
-				slog.String("error_code", errCode),
-				slog.String("error_message", errMsg),
-				slog.Int64("duration_ms", int64(dur*1000)),
-				slog.String("workflow_id", wfID.String()))
 		},
 	})
 

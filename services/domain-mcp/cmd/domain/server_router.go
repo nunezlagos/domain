@@ -216,33 +216,14 @@ func buildRouter(
 				if status != "cache_hit" {
 					metricsReg.MCPToolDuration.WithLabelValues(tool).Observe(dur)
 				}
-				wfID := observability.WorkflowIDFromContext(ctx)
-				invocationLogger.Log(observability.Invocation{
-					ToolName:     tool,
-					Status:       status,
-					DurationMS:   int(dur * 1000),
-					ErrorCode:    errCode,
-					ErrorMessage: errMsg,
-					WorkflowID:   wfID.String(),
-				})
-				if wfID != uuid.Nil {
-					workflowTracker.Touch(ctx, observability.WorkflowRow{
-						ID:              wfID,
-						Name:            observability.WorkflowNameFromContext(ctx),
-						Status:          observability.WorkflowRunning,
-						LastActivityAt:  time.Now(),
-						TotalToolCalls:  1,
-						TotalErrors:     boolToInt(status == "error"),
-						TotalDurationMS: int64(dur * 1000),
+				observability.LogToolInvocation(ctx, logger, invocationLogger, workflowTracker,
+					observability.ToolCall{
+						Tool:         tool,
+						Status:       status,
+						ErrorCode:    errCode,
+						ErrorMessage: errMsg,
+						DurationMS:   int64(dur * 1000),
 					})
-				}
-				logger.Info("tool invocation",
-					slog.String("tool", tool),
-					slog.String("status", status),
-					slog.String("error_code", errCode),
-					slog.String("error_message", errMsg),
-					slog.Int64("duration_ms", int64(dur*1000)),
-					slog.String("workflow_id", wfID.String()))
 			},
 			MetricsOnCacheHit:  func() { metricsReg.MCPCacheHitsTotal.Inc() },
 			MetricsOnCacheMiss: func() { metricsReg.MCPCacheMissesTotal.Inc() },
@@ -269,12 +250,4 @@ func buildRouter(
 		),
 	)
 	return finalHandler, invocationLogger, httpLogger, resourceCollector, fnLogger, workflowTracker
-}
-
-// boolToInt returns 1 if cond, else 0. Small helper for tool invocation counters.
-func boolToInt(cond bool) int {
-	if cond {
-		return 1
-	}
-	return 0
 }

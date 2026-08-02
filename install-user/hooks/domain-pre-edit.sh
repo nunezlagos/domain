@@ -214,12 +214,23 @@ if re.search(INTERPRETES, cmd):
     # debe coincidir con el working tree actual (invalida ante ediciones
     # posteriores a la corrida de tests).
     if [ "$fresh" != "yes" ] && [ -f "$marker" ] && [ -n "$(find "$marker" -mmin -30 2>/dev/null)" ]; then
-      stored_hash=$(cut -f2 "$marker" 2>/dev/null)
-      # DOMAINSERV-95: sin hash almacenado → NO fresco (fail-closed). Un marker
-      # legacy (solo-timestamp) o forjado con printf ya no habilita el commit.
-      if [ -n "$stored_hash" ]; then
-        current_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
-        [ "$current_hash" = "$stored_hash" ] && fresh="yes"
+      # DOMAINSERV-219: con field3 presente manda SOLO field3. No es un OR con
+      # field2: `git diff HEAD` no lista untracked, así que un .go nuevo sin
+      # `git add` lo deja igual y aceptar cualquiera de los dos conservaría ese
+      # falso verde. field2 solo se usa si field3 no está (marker ya en disco,
+      # escrito por la versión anterior del post-test).
+      stored_code=$(cut -f3 "$marker" 2>/dev/null)
+      if [ -n "$stored_code" ] && type domain_tests_code_hash >/dev/null 2>&1; then
+        current_code=$(domain_tests_code_hash)
+        [ -n "$current_code" ] && [ "$current_code" = "$stored_code" ] && fresh="yes"
+      else
+        stored_hash=$(cut -f2 "$marker" 2>/dev/null)
+        # DOMAINSERV-95: sin hash almacenado → NO fresco (fail-closed). Un marker
+        # legacy (solo-timestamp) o forjado con printf ya no habilita el commit.
+        if [ -n "$stored_hash" ]; then
+          current_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+          [ "$current_hash" = "$stored_hash" ] && fresh="yes"
+        fi
       fi
     fi
     # bypass de un solo uso que crea el humano: en modos automáticos el deny de

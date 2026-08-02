@@ -47,6 +47,37 @@ domain_call_tool() {
     -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}"
 }
 
+# domain_tests_code_hash — DOMAINSERV-219. Hash del CONTENIDO del árbol de
+# código, para que el commit-gate sepa si la corrida de tests sigue cubriendo el
+# estado actual. Reemplaza a sha256(git diff --no-color HEAD), que fallaba por
+# tres lados: (a) cambiaba al tocar un archivo inerte como el CHANGELOG,
+# (b) cambiaba con CADA commit porque HEAD se mueve, así que el segundo commit
+# del mismo lote nunca reusaba la corrida, y (c) no veía los untracked — un .go
+# nuevo sin `git add` NO invalidaba el marker (falso verde).
+#
+# Se hashea contenido del working tree (no del index), así que `git add` tampoco
+# lo mueve. Único inerte: .md fuera de templates/ y testdata/. Los .md de
+# templates/ son código (install-user/embed.go los mete en go:embed y
+# agent_voseo_test.go los aserta) y los de testdata/ son fixtures. Cualquier otra
+# extensión invalida el marker por default: fail-closed.
+domain_tests_code_hash() {
+  local raiz lista
+  raiz=$(git rev-parse --show-toplevel 2>/dev/null)
+  [ -n "$raiz" ] || return 1
+  # git no admite re-inclusión después de un :(exclude) en la misma llamada, de
+  # ahí las dos pasadas
+  lista=$(cd "$raiz" 2>/dev/null && {
+    git ls-files -co --exclude-standard -- ':(exclude)*.md'
+    git ls-files -co --exclude-standard -- '*templates/*.md' '*testdata/*.md'
+  } | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done | sort)
+  [ -n "$lista" ] || return 1
+  # los nombres van junto a los hashes: sin eso un rename o un borrado pasaría inadvertido
+  {
+    printf '%s\n' "$lista"
+    printf '%s\n' "$lista" | (cd "$raiz" && git hash-object --stdin-paths 2>/dev/null)
+  } | sha256sum 2>/dev/null | cut -d' ' -f1
+}
+
 # domain_log_injection <hook> <session_id> <resumen> — REQ-55 issue-55.5.
 # additionalContext de los hooks es invisible en la UI de Claude Code (sin log
 # nativo). Dejamos rastro auditable en ~/.local/state/domain/injections.log:

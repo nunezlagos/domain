@@ -16,6 +16,11 @@
 # cualquier fallo de parseo, sale sin tocar el marker.
 set +e
 
+# Lib compartida (best-effort): aporta domain_tests_code_hash. Si no está, el
+# marker se escribe igual con el hash legacy — el gate lo tolera.
+LIB="$(dirname "$0")/domain-hooks-lib.sh"
+[ -r "$LIB" ] && . "$LIB"
+
 payload=$(cat)
 
 # DOMAINSERV-71: si python3 no está disponible, no podemos parsear → skip
@@ -136,7 +141,11 @@ if [ "$tests_ok" = "1" ]; then
   # DOMAINSERV-74: marker con timestamp + tree hash (git diff HEAD) para
   # invalidar ante cualquier edición posterior.
   tree_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
-  printf '%s\t%s\n' "$(date -Iseconds)" "${tree_hash:-}" > "$marker" 2>/dev/null
+  # DOMAINSERV-219: field3 = hash del contenido del código, insensible a los
+  # archivos inertes y a que HEAD se mueva. field2 queda por compatibilidad.
+  code_hash=""
+  type domain_tests_code_hash >/dev/null 2>&1 && code_hash=$(domain_tests_code_hash)
+  printf '%s\t%s\t%s\n' "$(date -Iseconds)" "${tree_hash:-}" "${code_hash:-}" > "$marker" 2>/dev/null
 else
   rm -f "$marker" 2>/dev/null
 fi

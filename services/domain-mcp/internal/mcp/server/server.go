@@ -256,6 +256,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolAgentGet(), Handler: wrap.Wrap("domain_agent_get", deps.handleAgentGet)},
 		{Tool: toolAgentRun(), Handler: wrap.Wrap("domain_agent_run", deps.runAgentDispatch)},
 		{Tool: toolAgentRunLogs(), Handler: wrap.Wrap("domain_agent_run_logs", deps.handleAgentRunLogs)},
+		{Tool: toolAgentRunReport(), Handler: wrap.Wrap("domain_agent_run_report", deps.handleAgentRunReport)},
 		{Tool: toolFlowList(), Handler: wrap.Wrap("domain_flow_list", deps.handleFlowList)},
 		{Tool: toolFlowRun(), Handler: wrap.Wrap("domain_flow_run", deps.runFlowDispatch)},
 		{Tool: toolPromptRender(), Handler: wrap.Wrap("domain_prompt_render", deps.handlePromptRender)},

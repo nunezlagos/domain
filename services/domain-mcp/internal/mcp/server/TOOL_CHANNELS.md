@@ -1,7 +1,7 @@
 # Matriz de cobertura tool→canal (REQ-54 issue-54.6)
 
 Mantenido sincronizado con `internal/mcp/server/tool_channels.go` — validado por `TestToolChannelsDocInSync`.
-Total: 152 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
+Total: 153 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
 
 ## hook (6)
 Determinista por evento del cliente (SessionStart / UserPromptSubmit / Stop / post-orchestrate / pre-edit). No depende del modelo.
@@ -39,9 +39,10 @@ Exigida por una fase del SDD vía required_tool_calls — el server RECHAZA el c
 Su función la entrega el server en la preparación de contexto por fase (issue-54.2).
 
 
-## policy-triggered (31)
+## policy-triggered (32)
 Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trigger 54.4).
 
+- `domain_agent_run_report`
 - `domain_context_snapshot`
 - `domain_flow_status`
 - `domain_health`

@@ -43,6 +43,9 @@ var toolChannel = map[string]ToolChannel{
 	"domain_agent_list":     ChannelUserIntent,
 	"domain_agent_run":      ChannelUserIntent,
 	"domain_agent_run_logs": ChannelUserIntent,
+	// el reporte lo norma el protocolo al terminar una ejecucion agentica en el
+	// cliente, no lo pide el humano (DOMAINSERV-147)
+	"domain_agent_run_report": ChannelPolicyTriggered,
 
 	"domain_attachment_confirm":     ChannelUserIntent,
 	"domain_attachment_delete":      ChannelUserIntent,

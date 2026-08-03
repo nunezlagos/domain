@@ -3,9 +3,22 @@ description: Lee tickets de Domain (list/get/status_history) sin traer descripci
 mode: subagent
 model: anthropic/claude-sonnet-5
 permission:
+  "*": deny
+  domain-mcp_domain_ticket_list: allow
+  domain-mcp_domain_ticket_get: allow
+  domain-mcp_domain_ticket_status_history: allow
+  domain-mcp_domain_ticket_create: deny
+  domain-mcp_domain_ticket_update: deny
+  domain-mcp_domain_ticket_change_status: deny
+  domain-mcp_domain_ticket_comment_add: deny
+  domain-mcp_domain_ticket_delete: deny
+  domain-mcp_domain_ticket_link_issue: deny
   edit: deny
   write: deny
+  patch: deny
   bash: deny
+  webfetch: deny
+  websearch: deny
 ---
 
 # ticket-triage

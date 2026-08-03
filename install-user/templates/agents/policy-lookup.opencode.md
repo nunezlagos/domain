@@ -3,9 +3,21 @@ description: Recupera el body de UNA policy (o una lista corta) citable, sin tra
 mode: subagent
 model: anthropic/claude-sonnet-5
 permission:
+  "*": deny
+  domain-mcp_domain_policy_get: allow
+  domain-mcp_domain_policy_list: allow
+  domain-mcp_domain_project_policy_list: allow
+  domain-mcp_domain_project_policy_set: deny
+  domain-mcp_domain_project_policy_delete: deny
+  domain-mcp_domain_project_policy_import_from_text: deny
+  domain-mcp_domain_platform_policy_create: deny
+  domain-mcp_domain_platform_policy_edit: deny
   edit: deny
   write: deny
+  patch: deny
   bash: deny
+  webfetch: deny
+  websearch: deny
 ---
 
 # policy-lookup

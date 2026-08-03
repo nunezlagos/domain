@@ -3,9 +3,16 @@ description: Explora el repo con Read/Grep/Glob para lecturas exploratorias — 
 mode: subagent
 model: anthropic/claude-sonnet-5
 permission:
+  "*": deny
+  read: allow
+  grep: allow
+  glob: allow
   edit: deny
   write: deny
+  patch: deny
   bash: deny
+  webfetch: deny
+  websearch: deny
 ---
 
 # repo-scout

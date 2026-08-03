@@ -3,9 +3,19 @@ description: Subagent read-only de memoria domain. Delegar cuando la consulta se
 mode: subagent
 model: anthropic/claude-sonnet-5
 permission:
+  "*": deny
+  domain-mcp_domain_mem_search: allow
+  domain-mcp_domain_mem_get_observation: allow
+  domain-mcp_domain_knowledge_search: allow
+  domain-mcp_domain_timeline: allow
+  domain-mcp_domain_mem_save: deny
+  domain-mcp_domain_knowledge_save: deny
   edit: deny
   write: deny
+  patch: deny
   bash: deny
+  webfetch: deny
+  websearch: deny
 ---
 
 # domain-memory

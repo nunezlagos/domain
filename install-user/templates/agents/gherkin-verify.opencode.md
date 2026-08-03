@@ -3,9 +3,18 @@ description: Valida UN lote de escenarios Gherkin contra los tests que ya corrie
 mode: subagent
 model: anthropic/claude-sonnet-5
 permission:
+  "*": deny
+  read: allow
+  grep: allow
+  glob: allow
+  domain-mcp_domain_verify_update_item: deny
+  domain-mcp_domain_verify_complete: deny
   edit: deny
   write: deny
+  patch: deny
   bash: deny
+  webfetch: deny
+  websearch: deny
 ---
 
 # gherkin-verify

@@ -1,6 +1,14 @@
 -- migration: 000282_reconcile_platform_policies_post_228
 -- author: nunezlagos
 -- issue: issue-54.8 (secuela de DOMAINSERV-228)
+--
+-- ADVERTENCIA DE ORDEN — no aplicar esta migración sin el binario cuyo
+--   PlatformPoliciesSeeder.Version() >= 29. Esta migración sola no reconcilia nada: solo
+--   levanta el blindaje. Si corre contra una base cuyo binario todavía tiene el catálogo
+--   VIEJO, el próximo re-seed pisa guards-deben-ejecutarse SIN el "Corolario 2" y esas ~35
+--   líneas —que hoy solo existen en la fila de producción— se pierden. El flujo canónico no
+--   lo permite (install.sh migra y arranca el binario nuevo en el mismo paso), pero el orden
+--   no se deduce leyendo el SQL, así que va escrito.
 -- nota: toma la 282 y no la 280 porque el CHANGELOG reserva la 000280 para DOMAINSERV-185
 --   parte B (RLS de knowledge, bloqueada por dos decisiones abiertas) y la 000281 para
 --   DOMAINSERV-218. golang-migrate no exige contigüidad, y pisar un número reservado por otro

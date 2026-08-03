@@ -6,6 +6,7 @@
 package seeds_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -77,6 +78,24 @@ func TestPlatformPolicies_Catalogo_SddAutoTrigger_TieneLosBackticksDeLaFila(t *t
 
 	require.Equal(t, 7, strings.Count(body, "`")/2,
 		"son exactamente 7 pares; de más o de menos y el md5 contra la fila no coincide")
+}
+
+// La correctitud del change depende de que la migración y el binario lleguen JUNTOS: si
+// alguien corriera `migrate up` contra una base cuyo binario todavía tiene el catálogo viejo,
+// el reset del flag habilitaría al seeder a pisar guards-deben-ejecutarse SIN el Corolario 2,
+// y esas ~35 líneas se perderían de producción — el mismo contenido que este change rescata.
+// El header tiene que advertirlo, porque el orden no se deduce leyendo el SQL.
+func TestMigracion000282_ElHeaderAdvierteLaDependenciaDelBinario(t *testing.T) {
+	mig, err := os.ReadFile("../migrate/migrations/000282_reconcile_platform_policies_post_228.up.sql")
+	require.NoError(t, err)
+
+	header, _, encontrado := strings.Cut(string(mig), "UPDATE")
+	require.True(t, encontrado, "la migración tiene que tener su UPDATE")
+
+	require.Contains(t, header, "Version() >= 29",
+		"el header debe declarar que la migración no se aplica sin el binario que ya trae el catálogo reconciliado")
+	require.Contains(t, header, "no aplicar",
+		"la advertencia tiene que ser una instrucción, no una nota al pie que se lee después del incidente")
 }
 
 // El bump es lo que HABILITA la reconciliación. seeds.go:144 saltea el seeder cuando

@@ -1020,16 +1020,25 @@ func seedSkills(ctx context.Context, db execer, version int) (Report, error) {
 			e.Slug, e.Name, e.Description, e.SkillType,
 			contentPtr, input, output, e.TimeoutSeconds,
 			e.Idempotent, e.HasSideEffects, tags, version).Scan(&inserted)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			rep.Preserved++ // user-modified, no se sobrescribe
-		case err != nil:
+		if err := contarUpsertDeSkill(&rep, inserted, err); err != nil {
 			return rep, err
-		case inserted:
-			rep.Created++
-		default:
-			rep.Updated++
 		}
 	}
 	return rep, nil
+}
+
+// contarUpsertDeSkill clasifica el resultado de UN upsert. ErrNoRows es Preserved y no un
+// fallo: el WHERE de is_user_modified no devuelve fila cuando el operador editó la skill.
+func contarUpsertDeSkill(rep *Report, inserted bool, err error) error {
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		rep.Preserved++
+	case err != nil:
+		return err
+	case inserted:
+		rep.Created++
+	default:
+		rep.Updated++
+	}
+	return nil
 }

@@ -18,14 +18,22 @@ func (s *PlatformPoliciesSeeder) Version() int    { return 28 } // 28: premisas-
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
-type policyEntry struct {
+// PolicyEntry es una entrada del catalogo de platform policies.
+type PolicyEntry struct {
 	Slug, Name, Kind, BodyMD, SourceFile string
 }
 
-func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Report, error) {
-	var rep Report
-
-	policies := []policyEntry{
+// PlatformPolicyCatalog expone el catálogo como función —igual que SkillCatalog y
+// AgentTemplateCatalog— para que un guard pueda comparar la BD contra ÉL, y no el fuente
+// contra sí mismo. Mientras vivió inline dentro de Run() la única verificación posible era
+// leer este archivo como texto, y eso no ve una fila de producción que quedó vieja
+// (DOMAINSERV-228).
+//
+// size-lint:allow catálogo de datos, no lógica: partirlo solo esconde el largo en varias
+// funciones. Es la misma clase que SkillCatalog y AgentTemplateCatalog, exentas por vivir
+// en archivos *_catalog.go.
+func PlatformPolicyCatalog() []PolicyEntry {
+	return []PolicyEntry{
 		{
 			Slug:       "agent-protocol",
 			Name:       "Protocolo de agente IA (memoria + policies + tools domain_*)",
@@ -627,6 +635,11 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"`SearchHybrid`, que la suma como tercera modalidad del RRF.\n",
 		},
 	}
+}
+
+func (s *PlatformPoliciesSeeder) Run(ctx context.Context, tx pgx.Tx, env Env) (Report, error) {
+	var rep Report
+	policies := PlatformPolicyCatalog()
 
 	for _, p := range policies {
 

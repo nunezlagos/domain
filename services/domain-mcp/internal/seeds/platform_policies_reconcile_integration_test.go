@@ -48,6 +48,12 @@ func policyUserModified(ctx context.Context, t *testing.T, pool *pgxpool.Pool, s
 // DOMAINSERV-34: la migración 000270 resetea is_user_modified SOLO en los slugs
 // listados; el re-seed reaplica su body del fuente. Una fila user_modified NO
 // listada (sdd-auto-trigger) se preserva intacta.
+//
+// issue-54.8: este test sigue siendo correcto y NO se invierte — aplica solo la 000270, que
+// efectivamente no lista sdd-auto-trigger. Pero el slug ya no es un ejemplo de "preservado
+// para siempre": la migración 000280 SÍ lo reconcilia, una vez que el catálogo dejó de usar
+// raw-string y pudo llevar los backticks que eran toda la divergencia. Acá sigue siendo el
+// canario de "no listado en ESTA migración", nada más.
 func TestPlatformPolicies_Reconcile_ResetSlugsReaplican_NoListadosPreservados(t *testing.T) {
 	pool, cleanup := setupSeededDB(t)
 	defer cleanup()

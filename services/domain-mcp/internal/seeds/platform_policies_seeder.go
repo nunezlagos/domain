@@ -14,7 +14,7 @@ import (
 type PlatformPoliciesSeeder struct{}
 
 func (s *PlatformPoliciesSeeder) Name() string    { return "platform_policies" }
-func (s *PlatformPoliciesSeeder) Version() int    { return 28 } // 28: premisas-medidas-no-inferidas + agent-protocol gana la sección de FAN-OUT — un solo bump para los dos, porque 220 y 158 tocan el mismo seeder y el segundo en deployar encontraría el número consumido y skippearía en silencio (DOMAINSERV-220/158); 27: reportar-consumo-de-memoria — el protocolo de cuándo llamar domain_mem_used, creada antes por MCP y ausente del catálogo (DOMAINSERV-145); 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
+func (s *PlatformPoliciesSeeder) Version() int    { return 29 } // 29: el Corolario 2 de guards-deben-ejecutarse sube al catálogo y sdd-auto-trigger recupera sus backticks — el bump es lo que habilita la reconciliación, porque la migración 000282 limpia is_user_modified de los 4 slugs pero seeds.go:144 skippea mientras applied_version >= Version() y el catálogo no llegaría a ningún ambiente (issue-54.8, secuela de DOMAINSERV-228); 28: premisas-medidas-no-inferidas + agent-protocol gana la sección de FAN-OUT — un solo bump para los dos, porque 220 y 158 tocan el mismo seeder y el segundo en deployar encontraría el número consumido y skippearía en silencio (DOMAINSERV-220/158); 27: reportar-consumo-de-memoria — el protocolo de cuándo llamar domain_mem_used, creada antes por MCP y ausente del catálogo (DOMAINSERV-145); 26: context-preservation re-hidrata con domain_mem_get_observation porque mem_search pasa a devolver snippet de 200 + content_len (DOMAINSERV-161); 25: delegar-lecturas-multiples pasa a v2 — secciones "Escritura delegada" y "Prohibición dura: web y escritura no se combinan" (DOMAINSERV-156); 24: migracion-aplicada-no-se-edita + guards-deben-ejecutarse + delegar-lecturas-multiples (DOMAINSERV-198/197/175); 23: agent-protocol deja de nombrar buildRulesBlock, función borrada en DOMAINSERV-148; 22: seed context-preservation (DOMAINSERV-91, antes solo por MCP); 21: file-size-limit reconciliado func≤50 + archivo advisory, audit-tasks-checklist item 1 idem (DOMAINSERV-87); 20: validate-with-sources-context7 stack-aware (resolver library-id según manifest/skill de stack); 19: policy validate-with-sources-context7 (DOMAINSERV-40); 18: reaplicar body neutral a agent-protocol/agent-voice tras reset del flag (DOMAINSERV-34)
 func (s *PlatformPoliciesSeeder) Order() int      { return 30 }
 func (s *PlatformPoliciesSeeder) IsDevOnly() bool { return false }
 
@@ -387,48 +387,39 @@ Todas las respuestas en español. Sin excepciones.
 			Name:       "SDD auto-trigger: el pipeline es el camino default",
 			Kind:       "sdd_workflow",
 			SourceFile: "openspec/changes/REQ-54-orchestrator-tool-contract/issue-54.4-sdd-auto-trigger/",
-			BodyMD: `# SDD auto-trigger v2: TODO código pasa por SDD (REQ-54 issues 54.4 + 54.7)
-
-TODO cambio que toque CÓDIGO — sin excepción por tamaño, incluido lo trivial —
-DEBE ocurrir dentro de un flow SDD activo (domain_orchestrate). El spec del
-cambio se produce en la fase sdd-spec; NO se implementa sin spec.
-
-## Reglas por tipo de pedido
-
-- **Cualquier cambio de código** → domain_orchestrate PRIMERO. Mode acotado
-  al tamaño: trivial/simple → express, contenido → lite, requerimiento → full.
-- **Bug/task operativa que NO toca código todavía** → domain_ticket_create
-  (path E); al implementarlo, orquestar.
-- **Consultas/lecturas/análisis sin editar** → sin ceremonia.
-
-## Consulta obligatoria en el spec
-
-En la fase sdd-spec: ante ambigüedades, decisiones abiertas o supuestos no
-confirmados, CONSULTAR al usuario (AskUserQuestion) ANTES de redactar. No se
-especulan requisitos. El gate hardspec pausa después del spec para revisión
-humana.
-
-## Flow activo
-
-Si el proyecto tiene un flow SDD no-terminal, RETOMARLO (domain_flow_status)
-— NUNCA re-orquestar un flow nuevo para el mismo trabajo.
-
-## Enforcement (capas)
-
-1. Señal determinista: el hook UserPromptSubmit inyecta la clasificación de
-   cada prompt (additionalContext).
-2. Gate de código: el hook PreToolUse intercepta Edit/Write/NotebookEdit y
-   Bash-de-edición SIN flow activo — en modo normal pregunta al humano (ask);
-   en modos automáticos DENIEGA y fuerza a orquestar. La marca de flow la pone
-   PostToolUse al ver domain_orchestrate/flow_status.
-3. Esta policy es la norma citable.
-
-## Escape hatch
-
-Solo el USUARIO puede ordenar saltear el SDD (explícitamente). En ese caso el
-agente obedece y las ediciones que el gate detenga las aprueba el usuario en
-el diálogo de permisos. Limitación conocida: la heurística de Bash puede no
-detectar ediciones exóticas — hacerlo deliberadamente viola esta policy.`,
+			// string concatenado y no raw-string: un raw-string de Go se delimita con backtick,
+			// así que no puede contener los que el markdown necesita (issue-54.8)
+			BodyMD: "# SDD auto-trigger v2: TODO código pasa por SDD (REQ-54 issues 54.4 + 54.7)\n\n" +
+				"TODO cambio que toque CÓDIGO — sin excepción por tamaño, incluido lo trivial —\n" +
+				"DEBE ocurrir dentro de un flow SDD activo (`domain_orchestrate`). El spec del\n" +
+				"cambio se produce en la fase `sdd-spec`; NO se implementa sin spec.\n\n" +
+				"## Reglas por tipo de pedido\n\n" +
+				"- **Cualquier cambio de código** → `domain_orchestrate` PRIMERO. Mode acotado\n" +
+				"  al tamaño: trivial/simple → express, contenido → lite, requerimiento → full.\n" +
+				"- **Bug/task operativa que NO toca código todavía** → `domain_ticket_create`\n" +
+				"  (path E); al implementarlo, orquestar.\n" +
+				"- **Consultas/lecturas/análisis sin editar** → sin ceremonia.\n\n" +
+				"## Consulta obligatoria en el spec\n\n" +
+				"En la fase `sdd-spec`: ante ambigüedades, decisiones abiertas o supuestos no\n" +
+				"confirmados, CONSULTAR al usuario (AskUserQuestion) ANTES de redactar. No se\n" +
+				"especulan requisitos. El gate `hardspec` pausa después del spec para revisión\n" +
+				"humana.\n\n" +
+				"## Flow activo\n\n" +
+				"Si el proyecto tiene un flow SDD no-terminal, RETOMARLO (`domain_flow_status`)\n" +
+				"— NUNCA re-orquestar un flow nuevo para el mismo trabajo.\n\n" +
+				"## Enforcement (capas)\n\n" +
+				"1. Señal determinista: el hook UserPromptSubmit inyecta la clasificación de\n" +
+				"   cada prompt (additionalContext).\n" +
+				"2. Gate de código: el hook PreToolUse intercepta Edit/Write/NotebookEdit y\n" +
+				"   Bash-de-edición SIN flow activo — en modo normal pregunta al humano (ask);\n" +
+				"   en modos automáticos DENIEGA y fuerza a orquestar. La marca de flow la pone\n" +
+				"   PostToolUse al ver domain_orchestrate/flow_status.\n" +
+				"3. Esta policy es la norma citable.\n\n" +
+				"## Escape hatch\n\n" +
+				"Solo el USUARIO puede ordenar saltear el SDD (explícitamente). En ese caso el\n" +
+				"agente obedece y las ediciones que el gate detenga las aprueba el usuario en\n" +
+				"el diálogo de permisos. Limitación conocida: la heurística de Bash puede no\n" +
+				"detectar ediciones exóticas — hacerlo deliberadamente viola esta policy.",
 		},
 		{
 			Slug:       "code-comments-self-descriptive",
@@ -534,7 +525,40 @@ Esto mantiene el acoplamiento bajo y permite sustituir implementaciones sin toca
 				"Verificar siempre con un caso negativo explícito.\n\n" +
 				"Cuatro casos reales el 2026-07-28: el CI filtrando por una rama vieja, un deploy\n" +
 				"automático frenado solo por la ausencia de un runner, un baseline congelado 132\n" +
-				"migraciones atrás, y `govulncheck` un mes sin correr con 3 CVEs acumuladas.",
+				"migraciones atrás, y `govulncheck` un mes sin correr con 3 CVEs acumuladas.\n\n" +
+				"## Corolario 2: una feature que nunca se ejecutó tampoco está cubierta\n\n" +
+				"El principio no aplica solo a guards. Código completo, con tests y desplegado, que\n" +
+				"nunca corrió en el camino real **no está verificado** — está escrito. Y lo que lo\n" +
+				"mantiene apagado suele ser una sola línea que nadie mira: un flag con default\n" +
+				"`false`, un comando que solo se sugiere en un log, un cron detrás de una env var\n" +
+				"ausente del compose.\n\n" +
+				"El modo de falla es peor que el de un guard dormido, porque hay evidencia de trabajo:\n" +
+				"el commit existe, los tests pasan, el changelog lo declara resuelto. Nadie lo audita\n" +
+				"de nuevo.\n\n" +
+				"**Cinco casos medidos el 2026-07-29**, con su estado al 2026-08-03:\n\n" +
+				"- CERRADO — El REINDEX de los ivfflat: estaba degradado a una línea de `log`. Hoy\n" +
+				"  `services/install.sh:869` ejecuta `domain embed-reindex` en el camino real.\n" +
+				"- CERRADO — El cron de `skill_metrics`: apagado por una env var con default `false`\n" +
+				"  ausente del compose. Hoy `docker-compose.yml:122` la declara con default `true`.\n" +
+				"- CERRADO — El rollup semanal: un `INSERT` con 10 columnas en el target y 9\n" +
+				"  expresiones en el SELECT. Hoy `skill_metrics/sql/query.sql:172-200` tiene las 10.\n" +
+				"- ABIERTO — Los guards de templates de `domain-admin`: escritos, y en ningún\n" +
+				"  pipeline. Medido de nuevo el 2026-08-03 y es PEOR de lo que decía este texto: no\n" +
+				"  son dos archivos, son 49 tests `test_*.py` bajo `services/domain-admin`, y ninguno\n" +
+				"  de los 5 workflows de `.github/workflows/` los menciona.\n" +
+				"- CERRADO — La dimensión del embedding: la constante siguió en 1536 tras la\n" +
+				"  migración a `vector(1024)` porque el único camino que la leía estaba detrás de un\n" +
+				"  embedder en modo noop. Hoy es `migrate.EmbeddingDim` en\n" +
+				"  `internal/migrate/embedding.go:12`, con el guard `internal/migrate/embedding_test.go`\n" +
+				"  que la compara contra la migración 000275.\n\n" +
+				"**Qué hacer con esto:**\n\n" +
+				"1. Al cerrar un ticket cuyo entregable es un comando, un cron o un flag: declarar\n" +
+				"   explícitamente si YA CORRIÓ alguna vez en el entorno real. \"Queda listo y lo\n" +
+				"   corre el operador\" es una forma elegante de que no corra nunca.\n" +
+				"2. Si el paso depende de que una persona lo recuerde, no está hecho. Automatizarlo o\n" +
+				"   registrar por escrito que se decidió no hacerlo.\n" +
+				"3. Antes de dar por cubierta una feature detrás de un flag, verificar que el flag\n" +
+				"   esté prendido **en el ambiente que importa** — no solo que el código lo soporte.",
 		},
 		{
 			Slug:       "delegar-lecturas-multiples",

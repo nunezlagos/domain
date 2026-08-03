@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 7269bd6a-87dc-4a35-ad5f-6238fc086193
+  issue_slug: issue-54.8-reconciliar-platform-policies-divergent
+  req: REQ-54-orchestrator-tool-contract
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 561ac93b50b3f3b7f3d2fd7b2ce74d87ec0ac24e7adcd7c36fcc51ae14484a18
+  "design.md": 3c1ad0c3b71fad192a69bc22e5d3b28cf751a18e0bb6158638d9c033bbf0a91d
+  "tasks.md": da1a753782ba873ed1531e1cbe5d04c3f3cff5a4ba6ad036bd2ef9323f405fd5
+  "specs/issue-54.8-reconciliar-platform-policies-divergent/spec.md": 6181af7f46d01ff7db3a9bc51b360867261096cdfc8c4eef857d191180a35583

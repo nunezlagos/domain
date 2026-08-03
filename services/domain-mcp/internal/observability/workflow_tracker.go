@@ -66,14 +66,22 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 	// basura (era un valor NOT NULL válido, así que el DEFAULT nunca
 	// disparaba). El ON CONFLICT además repara filas que ya quedaron en
 	// zero por el bug previo: COALESCE toma el primer started_at real.
+	// project_id: el caller no lo tiene. Touch arma la fila desde el ctx del hook de
+	// metricas, y las tools que declaran flow_run_id no traen el proyecto en sus args.
+	// Se deriva de flow_runs, que es legitimo porque el workflow_id ES el flow_run_id
+	// (DOMAINSERV-212). Un workflow que no viene de una corrida no matchea y queda NULL:
+	// inventarlo seria peor que no tenerlo. El COALESCE del ON CONFLICT ademas repara las
+	// filas que ya nacieron sin el.
 	startedAt := nullableStartedAt(w.StartedAt)
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO workflows (
 			id, name, status, started_at, ended_at,
 			total_tool_calls, total_errors, total_duration_ms,
 			actor_id, api_key_id, project_id, last_activity_at, metadata
-		) VALUES ($1, NULLIF($2,''), $3, COALESCE($4, now()), $5, $6, $7, $8, $9, $10, $11, $12, '{}'::jsonb)
+		) VALUES ($1, NULLIF($2,''), $3, COALESCE($4, now()), $5, $6, $7, $8, $9, $10,
+			COALESCE($11, (SELECT project_id FROM flow_runs WHERE id = $1)), $12, '{}'::jsonb)
 		ON CONFLICT (id) DO UPDATE SET
+			project_id = COALESCE(workflows.project_id, EXCLUDED.project_id),
 			started_at = CASE
 				WHEN workflows.started_at = 'epoch'::timestamptz OR workflows.started_at < '1970-01-01'::timestamptz
 					THEN COALESCE(EXCLUDED.started_at, now())

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcptest"
@@ -124,4 +125,54 @@ func TestMCP_FlowRun_DosToolCalls_AcumulanEnUnaFilaDeWorkflow(t *testing.T) {
 	var filas int
 	require.NoError(t, store.Pool.QueryRow(ctx, `SELECT count(*) FROM workflows`).Scan(&filas))
 	require.Equal(t, 1, filas, "domain_orchestrate no declara corrida: no debe abrir una fila propia")
+}
+
+// Criterio 2 de DOMAINSERV-212: la fila nueva tiene project_id real. Medido en prod el
+// 2026-08-03: las 8 filas de orchestrator_flow lo tenían vacío, porque Touch arma la
+// WorkflowRow sin ProjectID y las tools que traen flow_run_id NO traen el proyecto en sus
+// args. El dato se deriva de flow_runs, que es legítimo porque el workflow_id ES el
+// flow_run_id por la decisión de diseño del propio ticket.
+func TestMCP_FlowRun_LaFilaDeWorkflow_HeredaElProjectIDDeLaCorrida(t *testing.T) {
+	srv, projectID, store, cleanup := setupWorkflowMCP(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	startTxt := callOrchTool(t, srv, "domain_orchestrate", map[string]any{
+		"raw_text":   "fix typo en README",
+		"mode":       "express",
+		"project_id": projectID,
+	})
+	var start struct {
+		FlowRunID string `json:"flow_run_id"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(startTxt), &start))
+
+	callOrchTool(t, srv, "domain_flow_status", map[string]any{"flow_run_id": start.FlowRunID})
+
+	var enBD *uuid.UUID
+	require.NoError(t, store.Pool.QueryRow(ctx,
+		`SELECT project_id FROM workflows WHERE id = $1`, start.FlowRunID).Scan(&enBD))
+	require.NotNil(t, enBD, "la fila nació con project_id NULL: sin él la telemetría no se puede filtrar por proyecto")
+	require.Equal(t, projectID, enBD.String(), "el project_id tiene que ser el de la corrida, no otro")
+}
+
+// Un workflow que NO viene de una corrida no tiene proyecto del cual heredar, y ahí el
+// NULL es la respuesta correcta: inventar un project_id sería peor que no tenerlo.
+func TestMCP_WorkflowSinCorrida_NoInventaProjectID(t *testing.T) {
+	_, _, store, cleanup := setupWorkflowMCP(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	huerfano := uuid.New()
+	require.NoError(t, store.UpsertWorkflow(ctx, observability.WorkflowRow{
+		ID:             huerfano,
+		Status:         observability.WorkflowRunning,
+		LastActivityAt: time.Now(),
+		TotalToolCalls: 1,
+	}))
+
+	var enBD *uuid.UUID
+	require.NoError(t, store.Pool.QueryRow(ctx,
+		`SELECT project_id FROM workflows WHERE id = $1`, huerfano).Scan(&enBD))
+	require.Nil(t, enBD, "sin flow_run del cual derivarlo, el project_id queda NULL y no se inventa")
 }

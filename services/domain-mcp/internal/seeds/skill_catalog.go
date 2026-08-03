@@ -24,7 +24,7 @@ type execer interface {
 // skillsSeedVersion es la versión actual del catálogo de skills. Se usa
 // tanto en el Seeder (SkillsCatalogSeeder.Version) como en el wrapper
 // pool-based SeedSkillsForOrg.
-const skillsSeedVersion = 9 // 9: neutralización de voseo en bodies de skills (DOMAINSERV-20)
+const skillsSeedVersion = 10 // 10: borrado-de-datos-contar-antes — el guard de DOMAINSERV-222 mira comandos de Bash, y una migración con DELETE sin WHERE no pasa por él: se escribe con Write y la ejecuta el runner, así que el procedimiento es el único control; 9: neutralización de voseo en bodies de skills (DOMAINSERV-20)
 
 // SkillsCatalogSeeder implementa el interface Seeder para el catálogo
 // global de skills. Order > platform_policies/project_templates/mcp_providers.
@@ -903,6 +903,66 @@ JSON estricto:
 			TimeoutSeconds: 300,
 			Idempotent:     true,
 			Tags:           []string{"review", "adversarial", "quality", "workflow", "platform"},
+		},
+		{
+			Slug:        "borrado-de-datos-contar-antes",
+			Name:        "Borrado de datos: contar antes de borrar",
+			Description: "Procedimiento para escribir un borrado de datos legítimo (GDPR, filas basura, corrección) en una migración o en SQL suelto. Cubre el hueco que el guard de comandos no ve.",
+			SkillType:   "prompt",
+			Content: `# Borrado de datos: contar antes de borrar
+
+## Por qué existe esta skill
+
+El guard de borrado destructivo (DOMAINSERV-222) intercepta comandos de Bash: un
+` + "`rm -rf`" + ` del proyecto, un ` + "`psql -c \"DROP TABLE\"`" + `, un ` + "`TRUNCATE`" + ` por la CLI.
+
+Una migración NO pasa por ese guard. Se escribe con Write y la ejecuta el runner de
+golang-migrate, así que un ` + "`DELETE FROM`" + ` sin WHERE dentro de un ` + "`.up.sql`" + ` llega a
+producción sin que nada lo detenga. Acá no hay red: el procedimiento es el único control.
+
+## El principio
+
+Ningún borrado de datos se escribe antes de contar cuántas filas toca.
+
+El ` + "`SELECT count(*)`" + ` con el WHERE EXACTO que va a usar el borrado se corre primero, y
+su número queda escrito en el ticket. Si no se sabe cuántas filas caen, el borrado no se
+escribe todavía.
+
+## Cuatro reglas
+
+1. **El WHERE se prueba como SELECT antes de ser DELETE.** El mismo WHERE, sin cambiarle
+   una coma. Un WHERE que no se probó es una hipótesis, no un filtro.
+2. **` + "`WHERE 1=1`" + ` y ` + "`WHERE true`" + ` NO son WHERE.** Cumplen la letra de "tiene WHERE" y
+   borran la tabla entera. Tampoco lo es un WHERE comentado con ` + "`/* ... */`" + `.
+3. **El ` + "`.down.sql`" + ` de un borrado no recupera filas.** Un down honesto no puede
+   inventar los datos que el up borró: si el up borra datos, la migración es
+   ` + "`breaking:yes`" + ` y el header nombra el backup concreto que permite volver.
+4. **` + "`migrate down`" + ` dropea.** En producción va con el conteo previo y autorización
+   humana explícita, nunca dentro de un flow automático.
+
+## Antes de escribir el archivo
+
+- ¿Es SCHEMA o es CATÁLOGO? El contenido de catálogo (policies, skills, agents, prompts,
+  templates) va por seeder + bump, no por migración. Ver [[data-migration-methodology]].
+- ¿Hay filas huérfanas que el WHERE vuelve invisibles en vez de borrar? Contarlas aparte:
+  perder acceso a datos no es lo mismo que borrarlos, y se diagnostica distinto.
+- ¿La tabla tiene RLS? Un borrado sin el GUC de scope puede afectar 0 filas o todas, y las
+  dos cosas se parecen a "funcionó".
+
+## Sabotaje mental, antes de dar por buena la migración
+
+- Si esta migración corre DOS veces, ¿borra el doble o es idempotente?
+- Si corre en una base con 100 veces los datos de desarrollo, ¿cuánto dura el lock?
+- Si el WHERE tiene un typo en el nombre de una columna, ¿falla o borra todo?
+- ¿El error del borrado se descarta en algún lugar del código? Un borrado que falla en
+  silencio es peor que uno que no corre.
+
+Complementa [[schema-migration-authoring]], que cubre el checklist de autoría (header,
+numeración, expand/contract, índices concurrentes, reversibilidad), y las policies
+[[migration-safety]] y [[migracion-aplicada-no-se-edita]].`,
+			TimeoutSeconds: 60,
+			Idempotent:     true,
+			Tags:           []string{"migraciones", "datos", "borrado", "seguridad", "platform"},
 		},
 	}
 }

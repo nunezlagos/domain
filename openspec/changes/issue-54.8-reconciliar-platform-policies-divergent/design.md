@@ -13,6 +13,10 @@ golang-migrate con `UPDATE` acotado por `WHERE slug IN (...)`, calcada de
 con esa tool deja la fila IGUAL de blindada, y el guard de divergencia la sigue tolerando
 para siempre — que es exactamente el modo de falla que este change cierra.
 
+La policy `data-migration-methodology` lo prescribe explicitamente en su seccion
+`is_user_modified`: "Reconciliar una fila stale mal-congelada = migracion quirurgica que
+resetea el flag + re-seed".
+
 Patron: forward-only data migration.
 
 ### ADR 2 — `guards-deben-ejecutarse` se mergea hacia el catalogo; no se pisa la fila
@@ -81,7 +85,7 @@ flag este limpio, y nada converge en ningun ambiente.
 | 2 | `TestPlatformPolicies_Catalogo_SddAutoTrigger_CoincideConLaFilaDeProd` | md5 del `BodyMD` == md5 del `body_md` de la fila | sacar un par de backticks de `domain_orchestrate` en el catalogo → md5 distinto, el test falla |
 | 3 | `TestMigracion000282_ReseteaSoloLosCuatroSlugsAdjudicados` | tras la migracion, exactamente 4 filas con `is_user_modified=false` y las otras 4 marcadas intactas | quitar el `WHERE slug IN (...)` → resetea las 8, el test cuenta 8 y falla |
 | 4 | `TestPlatformPoliciesSeeder_Version_EsMayorQueLaAplicadaEnProd` | `Version() == 29` | dejar `Version()` en 28 → `alreadyApplied` es true y el seeder skippea; el test lo atrapa antes del deploy |
-| 5 | `platform_policies_reconcile_integration_test.go:51-81` (INVERTIDO) | que `sdd-auto-trigger` YA NO conserve `is_user_modified=true` | dejar el assert viejo → falla contra la migracion nueva, que es justamente la senal de contrato cambiado |
+| 5 | `TestMigracion000282_ElHeaderAdvierteLaDependenciaDelBinario` | que el header exija el binario con `Version() >= 29`, porque aplicar la migracion con el catalogo viejo borraria el Corolario 2 de prod | cambiar el texto → `does not contain "Version() >= 29"` |
 
 Los tests 2, 3 y 5 son de INTEGRACION contra Postgres real: la diferencia entre lo que dice
 el fuente y lo que dice la fila la sabe la base, no el codigo Go. Ese es precisamente el

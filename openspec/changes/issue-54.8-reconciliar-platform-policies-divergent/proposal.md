@@ -37,9 +37,10 @@ Entra:
   string concatenado con `\n`, incorporando los 7 pares de backticks.
 - `platform_policies_seeder.go:17`: `Version()` 28 -> 29 con su nota en el changelog inline.
 - Migracion `000282_reconcile_platform_policies_post_228`: reset de `is_user_modified`
-  acotado a los 4 slugs adjudicados.
-- `platform_policies_reconcile_integration_test.go:51-81`: invertir el assert que hoy exige
-  que `sdd-auto-trigger` conserve el flag.
+  acotado a los 4 slugs adjudicados, con ADVERTENCIA DE ORDEN en el header.
+- `platform_policies_reconcile_integration_test.go:51-81`: NO se invierte el assert. La
+  premisa era falsa: ese test aplica solo la 000270, que no lista `sdd-auto-trigger`, asi que
+  su asercion sigue siendo verdadera. Se deja intacto con una nota aclaratoria.
 
 Queda fuera:
 
@@ -62,8 +63,9 @@ Queda fuera:
 4. Bumpear `Version()` a 29 en el mismo change: sin bump, `seeds.go:144`
    (`alreadyApplied := err == nil && appliedVersion >= s.Version()`) saltea el seeder y nada
    converge en ningun ambiente.
-5. Invertir el assert que consagra el estado viejo como cambio de contrato documentado, no
-   relajandolo ni salteandolo.
+5. Advertir en el header de la migracion que no se aplique sin el binario con
+   `Version() >= 29`: el orden no se deduce leyendo el SQL, y aplicarla con el catalogo viejo
+   haria que el re-seed borre el Corolario 2 de produccion.
 
 ## Risks
 

@@ -402,8 +402,13 @@ func (s *Service) SearchHybrid(ctx context.Context, projectID uuid.UUID, query s
 	return out, nil
 }
 
-func (s *Service) SoftDelete(ctx context.Context, id, actorID uuid.UUID) error {
-	n, err := s.q(ctx).SoftDeleteDoc(ctx, id)
+// projectID es REQUERIDO y no opcional con warning: borrar en el proyecto equivocado es
+// silencioso e irreversible, así que va fail-closed (doctrina de DOMAINSERV-217).
+func (s *Service) SoftDelete(ctx context.Context, projectID, id, actorID uuid.UUID) error {
+	n, err := s.q(ctx).SoftDeleteDoc(ctx, knowledgedb.SoftDeleteDocParams{
+		ID:        id,
+		ProjectID: projectID,
+	})
 	if err != nil {
 		return fmt.Errorf("soft delete: %w", err)
 	}

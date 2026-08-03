@@ -113,3 +113,34 @@ func (d *Deps) handleKnowledgeGet(ctx context.Context, req mcp.CallToolRequest) 
 		"chunks":   chunks,
 	})
 }
+
+// DOMAINSERV-227: sin esta tool `domain_knowledge_save` era una escritura sin inversa y
+// limpiar un documento equivocado exigía SQL contra producción.
+func (d *Deps) handleKnowledgeDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if d.Principal == nil || d.Knowledge == nil {
+		return mcp.NewToolResultError("knowledge service no configurado"), nil
+	}
+	args := req.GetArguments()
+	idStr, _ := args["id"].(string)
+	slug, _ := args["project_slug"].(string)
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return mcp.NewToolResultError("id invalido (UUID)"), nil
+	}
+	if slug == "" {
+		return mcp.NewToolResultError("project_slug requerido"), nil
+	}
+	orgID, _ := uuid.Parse(d.Principal.OrganizationID)
+	proj, err := d.Projects.GetBySlug(ctx, orgID, slug)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project '%s' not found", slug)), nil
+	}
+	actorID, _ := uuid.Parse(d.Principal.UserID)
+	if err := d.Knowledge.SoftDelete(ctx, proj.ID, id, actorID); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("delete: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"id":      id,
+		"deleted": true,
+	})
+}

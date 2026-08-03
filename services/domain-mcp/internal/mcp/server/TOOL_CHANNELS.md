@@ -1,7 +1,7 @@
 # Matriz de cobertura tool→canal (REQ-54 issue-54.6)
 
 Mantenido sincronizado con `internal/mcp/server/tool_channels.go` — validado por `TestToolChannelsDocInSync`.
-Total: 153 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
+Total: 154 tools, cero huérfanas (invariante: TestAllToolsHaveChannel).
 
 ## hook (6)
 Determinista por evento del cliente (SessionStart / UserPromptSubmit / Stop / post-orchestrate / pre-edit). No depende del modelo.
@@ -75,7 +75,7 @@ Normada por policy/protocolo (domain.md, auto-persistencia, señal del auto-trig
 - `domain_skill_search`
 - `domain_ticket_create`
 
-## user-intent (103)
+## user-intent (104)
 Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 
 - `domain_agent_create`
@@ -125,6 +125,7 @@ Manual POR DISEÑO: solo cuando el humano lo pide. Automatizarla es regresión.
 - `domain_issue_drafts_list`
 - `domain_issue_list`
 - `domain_issue_set_status`
+- `domain_knowledge_delete`
 - `domain_mem_delete`
 - `domain_mem_infer_edges`
 - `domain_mem_infer_edges_llm`

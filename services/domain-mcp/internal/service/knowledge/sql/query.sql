@@ -81,8 +81,13 @@ ORDER BY score DESC
 LIMIT sqlc.arg('result_limit')::int;
 
 -- name: SoftDeleteDoc :execrows
+-- El project_id va en la MISMA sentencia que muta, no en un SELECT previo: sin
+-- ventana entre el chequeo y el borrado, y sin una segunda query que un refactor
+-- pueda omitir. Resolver solo por id era el IDOR que DOMAINSERV-217 cerró en verify.
 UPDATE knowledge_docs SET deleted_at = NOW()
-WHERE id = sqlc.arg('id') AND deleted_at IS NULL;
+WHERE id = sqlc.arg('id')
+  AND project_id = sqlc.arg('project_id')
+  AND deleted_at IS NULL;
 
 -- name: ListDocsByProject :many
 SELECT id, project_id, created_by, title, body, source,

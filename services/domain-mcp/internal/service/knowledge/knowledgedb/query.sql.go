@@ -432,11 +432,21 @@ func (q *Queries) SearchHybrid(ctx context.Context, arg SearchHybridParams) ([]S
 
 const softDeleteDoc = `-- name: SoftDeleteDoc :execrows
 UPDATE knowledge_docs SET deleted_at = NOW()
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1
+  AND project_id = $2
+  AND deleted_at IS NULL
 `
 
-func (q *Queries) SoftDeleteDoc(ctx context.Context, id uuid.UUID) (int64, error) {
-	result, err := q.db.Exec(ctx, softDeleteDoc, id)
+type SoftDeleteDocParams struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+}
+
+// El project_id va en la MISMA sentencia que muta, no en un SELECT previo: sin
+// ventana entre el chequeo y el borrado, y sin una segunda query que un refactor
+// pueda omitir. Resolver solo por id era el IDOR que DOMAINSERV-217 cerró en verify.
+func (q *Queries) SoftDeleteDoc(ctx context.Context, arg SoftDeleteDocParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteDoc, arg.ID, arg.ProjectID)
 	if err != nil {
 		return 0, err
 	}

@@ -108,6 +108,9 @@ var toolChannel = map[string]ToolChannel{
 	"domain_issue_list":           ChannelUserIntent,
 	"domain_issue_set_status":     ChannelUserIntent,
 
+	// user-intent y no policy-triggered: borrar un documento lo decide una persona.
+	// Ninguna norma debe disparar un borrado sola (DOMAINSERV-227)
+	"domain_knowledge_delete": ChannelUserIntent,
 	"domain_knowledge_get":    ChannelPolicyTriggered,
 	"domain_knowledge_save":   ChannelPhaseContract, // contrato de sdd-onboard
 	"domain_knowledge_search": ChannelPolicyTriggered,

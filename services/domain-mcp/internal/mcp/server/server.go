@@ -254,6 +254,7 @@ func Tools(deps Deps) []mcpgo.ServerTool {
 		{Tool: toolAttachmentIndex(), Handler: wrap.Wrap("domain_attachment_index", rls(deps.handleAttachmentIndex))},
 		{Tool: toolKnowledgeSearch(), Handler: wrap.Wrap("domain_knowledge_search", rlsProyecto(deps.handleKnowledgeSearch))},
 		{Tool: toolKnowledgeGet(), Handler: wrap.Wrap("domain_knowledge_get", rlsProyecto(deps.handleKnowledgeGet))},
+		{Tool: toolKnowledgeDelete(), Handler: wrap.Wrap("domain_knowledge_delete", rlsProyecto(deps.handleKnowledgeDelete))},
 		{Tool: toolSkillList(), Handler: wrap.Wrap("domain_skill_list", deps.handleSkillList)},
 		{Tool: toolSkillSearch(), Handler: wrap.Wrap("domain_skill_search", deps.handleSkillSearch)},
 		{Tool: toolSkillGet(), Handler: wrap.Wrap("domain_skill_get", deps.handleSkillGet)},
@@ -602,6 +603,20 @@ func toolKnowledgeGet() mcp.Tool {
 		),
 		mcp.WithString("project_slug",
 			mcp.Description("Proyecto dueno del documento. Obligatorio: un id de otro proyecto no resuelve"),
+			mcp.Required(),
+		),
+	)
+}
+
+func toolKnowledgeDelete() mcp.Tool {
+	return mcp.NewTool("domain_knowledge_delete",
+		mcp.WithDescription("Soft-delete de un knowledge document por id: deja de aparecer en domain_knowledge_search y en get. Sus chunks quedan invisibles porque la busqueda filtra por el documento padre. Usar para limpiar un documento cargado por error o una ingesta que quedo a medias."),
+		mcp.WithString("id",
+			mcp.Description("UUID del documento"),
+			mcp.Required(),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("Proyecto dueno del documento. Obligatorio: un id de otro proyecto NO borra"),
 			mcp.Required(),
 		),
 	)

@@ -177,7 +177,7 @@ func TestKnowledge_SoftDelete(t *testing.T) {
 	doc, _, _ := f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID, Title: "T", Body: "y",
 	})
-	require.NoError(t, f.svc.SoftDelete(ctx, doc.ID, f.userID))
+	require.NoError(t, f.svc.SoftDelete(ctx, f.projectID, doc.ID, f.userID))
 	_, _, err := f.svc.Get(ctx, f.projectID, doc.ID)
 	require.ErrorIs(t, err, knowledge.ErrNotFound)
 }

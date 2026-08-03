@@ -582,6 +582,25 @@ y las otras fases no).
 - saved_observation_ids con los IDs de mem_save post-commit (obligatorio).
 </reglas>
 
+<guard_de_borrado>
+El cliente intercepta comandos DESTRUCTIVOS antes de ejecutarlos (DOMAINSERV-222).
+Es determinista y NO se negocia por chat ni por argumento.
+
+Escala tres clases, incluso dentro de docker exec / ssh / sh -c / xargs / find:
+- rm recursivo del proyecto, del cwd, de un ancestro o de .git
+- rm de archivos sensibles (.env*, *.key, *.pem, id_rsa, credenciales), aun sin flags
+- SQL destructivo por psql/mysql: DROP, TRUNCATE, DELETE o UPDATE sin WHERE
+
+Cuando te bloquee: el borrado NO es tuyo, es del HUMANO. Explícale qué querías borrar
+y por qué, y espera. NUNCA reescribas el comando para esquivar el guard — cubre
+expansiones y envolturas, así que casi siempre falla, y el intento queda registrado.
+Un rm -rf de node_modules o de un temporal NO dispara: si algo se bloqueó, revisa el
+objetivo antes de asumir que es un falso positivo.
+
+Ojo: el guard mira comandos de Bash. Una migración con DROP TABLE se escribe con Write
+y la ejecuta el runner, así que NO pasa por acá — ahí manda la policy migration-safety.
+</guard_de_borrado>
+
 <output_format>
 JSON estricto por task completada:
 {
@@ -1122,7 +1141,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 24 // 24: verify_update_item/_complete exigen project_slug y un item kind='test' no cierra en 'pass' sin evidencia de sabotaje (DOMAINSERV-217 y 219), y el plan de sdd-verify delega los lotes en gherkin-verify (DOMAINSERV-155); los prompts seedeados que instruyen esas tools quedarían con el contrato viejo sin el bump; 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 25 // 25: sdd-apply conoce el guard de borrado destructivo — es la fase que ejecuta comandos, y un agente que no sabe que el guard existe gasta turnos peleándose con un deny o, peor, reescribe el comando para evadirlo (DOMAINSERV-222); 24: verify_update_item/_complete exigen project_slug y un item kind='test' no cierra en 'pass' sin evidencia de sabotaje (DOMAINSERV-217 y 219), y el plan de sdd-verify delega los lotes en gherkin-verify (DOMAINSERV-155); los prompts seedeados que instruyen esas tools quedarían con el contrato viejo sin el bump; 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

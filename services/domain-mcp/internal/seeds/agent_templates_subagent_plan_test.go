@@ -71,6 +71,30 @@ func TestAgentTemplatesSeedVersion_CubreElContratoNuevoDeVerify(t *testing.T) {
 		"217, 219 y 155 comparten UN bump a 24; sin él el prompt con el contrato viejo sigue en BD")
 }
 
+// DOMAINSERV-222: sdd-apply es la fase que EJECUTA comandos, y hay un guard en el cliente
+// que intercepta los destructivos. Si el agente no sabe que existe, gasta turnos peleándose
+// con un deny que no puede negociar — o peor, reescribe el comando para evadirlo. El prompt
+// tiene que nombrarlo y decir cuál es la vía correcta: pedírselo al humano.
+func TestAgentTemplates_SddApply_ConoceElGuardDeBorrado(t *testing.T) {
+	var applyPrompt string
+	for _, tpl := range AgentTemplateCatalog() {
+		if tpl.Slug == "sdd-apply" {
+			applyPrompt = tpl.SystemPrompt
+			break
+		}
+	}
+	require.NotEmpty(t, applyPrompt, "sdd-apply debe estar en el catálogo")
+
+	for _, frag := range []string{"DOMAINSERV-222", "DESTRUCTIVOS", "HUMANO"} {
+		require.Contains(t, applyPrompt, frag,
+			"el prompt de sdd-apply debe dar contexto del guard: sin esto el agente intenta rodearlo")
+	}
+	require.NotContains(t, applyPrompt, "gate-bypass",
+		"el prompt NO debe enseñar la ruta del bypass: autorizar un borrado es del humano, no del agente")
+	require.GreaterOrEqual(t, agentTemplatesSeedVersion, 25,
+		"tocar el prompt seedeado exige bump a 25; sin él el prompt viejo sigue gobernando en BD")
+}
+
 // DOMAINSERV-161: el fan-out de domain_policy_get en sdd-review vive en el prompt
 // seedeado. seeds.go skippea el seeder si applied_version >= Version(), así que sin bump
 // el prompt VIEJO sigue gobernando el gate en producción — y el síntoma es
@@ -92,7 +116,6 @@ func TestAgentTemplates_FanOutDePolicyGet_ExigeBumpDeVersion(t *testing.T) {
 	require.GreaterOrEqual(t, agentTemplatesSeedVersion, 21,
 		"el fan-out en el prompt seedeado exige bump a 21: sin él el seeder se skippea y el prompt viejo sigue en BD")
 }
-
 
 // MUST-7 de DOMAINSERV-161: mem_search pasa a devolver 200 caracteres, así que la policy
 // que re-hidrata tras compactación tiene que pedir la observación completa por id. Sin

@@ -3,6 +3,7 @@ package seeds
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -992,7 +993,11 @@ func seedSkills(ctx context.Context, db execer, version int) (Report, error) {
 			contentPtr = &e.Content
 		}
 
-		tag, err := db.Exec(ctx, `
+		// xmax = 0 distingue el INSERT real del UPDATE del upsert; RowsAffected da 1 para
+		// los dos y hacía que todo se contara como Created (DOMAINSERV-225). El WHERE de
+		// abajo no devuelve fila cuando is_user_modified, así que ErrNoRows es Preserved.
+		var inserted bool
+		err := db.QueryRow(ctx, `
 			INSERT INTO skills (slug, name, description, skill_type,
 			                    content, input_schema, output_schema, timeout_seconds,
 			                    idempotent, has_side_effects, tags,
@@ -1010,18 +1015,19 @@ func seedSkills(ctx context.Context, db execer, version int) (Report, error) {
 			    has_side_effects = EXCLUDED.has_side_effects,
 			    tags             = EXCLUDED.tags,
 			    seed_version     = EXCLUDED.seed_version
-			WHERE skills.is_user_modified = FALSE`,
+			WHERE skills.is_user_modified = FALSE
+			RETURNING (xmax = 0)`,
 			e.Slug, e.Name, e.Description, e.SkillType,
 			contentPtr, input, output, e.TimeoutSeconds,
-			e.Idempotent, e.HasSideEffects, tags, version)
-		if err != nil {
-			return rep, err
-		}
-		if tag.RowsAffected() == 1 {
-			rep.Created++
-		} else if tag.RowsAffected() == 0 {
+			e.Idempotent, e.HasSideEffects, tags, version).Scan(&inserted)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
 			rep.Preserved++ // user-modified, no se sobrescribe
-		} else {
+		case err != nil:
+			return rep, err
+		case inserted:
+			rep.Created++
+		default:
 			rep.Updated++
 		}
 	}

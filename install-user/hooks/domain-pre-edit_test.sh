@@ -8,7 +8,10 @@ set -uo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 HOOK="$SCRIPT_DIR/domain-pre-edit.sh"
 FAKE_HOME="$(mktemp -d)"
-trap 'rm -rf "$FAKE_HOME"' EXIT
+# cwd aislado para el guard destructivo (DOMAINSERV-222): mide el radio de daño contra
+# el cwd de la sesión, y no queremos que los casos dependan del directorio real.
+FAKE_CWD="$(mktemp -d)"
+trap 'rm -rf "$FAKE_HOME" "$FAKE_CWD"' EXIT
 
 FAILS=0
 # run <payload> → imprime stdout del hook con HOME aislado
@@ -93,10 +96,13 @@ done
 # payload <session> <command> → JSON bien formado (el escapado a mano corrompe
 # el JSON y el hook responde el deny de DOMAINSERV-103, no lo que se testea)
 payload() {
-  S="$1" C="$2" python3 -c '
+  # DOMAINSERV-222: el guard destructivo mide el RADIO contra el cwd de la sesión, así
+  # que el payload lo declara. Va a un temp aislado (no al repo) para que `rm -rf .`
+  # decida siempre igual, corran los tests desde donde corran.
+  S="$1" C="$2" W="${3:-$FAKE_CWD}" python3 -c '
 import json, os
 print(json.dumps({"session_id": os.environ["S"], "tool_name": "Bash",
-                  "permission_mode": "acceptEdits",
+                  "permission_mode": "acceptEdits", "cwd": os.environ["W"],
                   "tool_input": {"command": os.environ["C"]}}))'
 }
 
@@ -227,6 +233,326 @@ check_contains "commit-gate: segundo commit sin bypass vuelve a denegar" 'commit
 printf 'razon\n' > "$FAKE_HOME/.local/state/domain/gate-bypass-sab-sess"
 sab='{"session_id":"sab-sess","tool_name":"Write","permission_mode":"acceptEdits","tool_input":{"file_path":"/tmp/x.go"}}'
 check_contains "el bypass NO habilita escribir código" '"permissionDecision":"deny"' "$(run "$sab")"
+
+# 20) DOMAINSERV-222 — GUARD DESTRUCTIVO, rediseñado por RADIO DE DAÑO.
+#     EL INCIDENTE, textual: el usuario corrió `docker exec docker-ace-did-app rm -f
+#     .env.qa` creyendo que borraba una copia DENTRO del container; /app era un bind
+#     mount del repo host, así que se llevó el original. Fue `rm -f` (NO -rf) y llegó por
+#     `docker exec` (rm NO era el primer token).
+#     EL CRITERIO NUEVO (decisión del usuario): el guard NO mira el flag, mira el radio.
+#     `rm -f archivo` salió del alcance — medía 265 de 334 disparos sobre 21.105 comandos
+#     reales. Alcance y HUECOS CONOCIDOS: ../hook_destructive_guard_test.go.
+out="$(run "$(payload inc-sess 'docker exec docker-ace-did-app rm -f .env.qa')")"
+check_contains "destructive-guard: el incidente dispara" 'destructive-guard' "$out"
+check_contains "destructive-guard: el incidente es de clase sensible" '[sensible]' "$out"
+
+# El alcance acordado, caso por caso. Nada de esto se ejecuta: es el PAYLOAD del hook.
+# El formato es "<motivo esperado>|<comando>": el motivo también se verifica, porque dos
+# implementaciones que disparan por razones distintas ya están divergiendo.
+while IFS= read -r linea; do
+  motivo="${linea%%|*}"; destr="${linea#*|}"
+  out="$(run "$(payload destr-sess "$destr")")"
+  check_contains "destructive-guard [$motivo] bloquea: $destr" "[$motivo]" "$out"
+done <<'DESTRS'
+radio|rm -rf .
+radio|rm -rf ./*
+radio|rm -rf ..
+radio|rm -rf /
+radio|rm -rf $HOME
+radio|rm -rf ~
+radio|rm -rf /app
+radio|rm -rf /srv
+radio|rm -rf /var/www
+radio|rm -rf /usr/src/app
+radio|rm -rf .git
+radio|rm -R .
+radio|rm --recursive .
+radio|docker exec docker-ace-did-app "rm -rf /repo"
+radio|ssh vps-domain 'rm -rf /srv/domain'
+radio|kubectl exec pod -- "rm -rf /data"
+radio|docker run --rm -v /repo:/app alpine rm -rf /app
+radio|sudo -u www-data rm -rf /var/www
+radio|timeout 5 rm -rf /app
+radio|nice -n 10 rm -rf /app
+radio|/usr/bin/env rm -rf /app
+radio|setsid rm -rf /app
+radio|if [ -d x ]; then rm -rf /app; fi
+radio|for f in a b; do rm -rf /app; done
+radio|'rm' -rf /app
+radio|"/bin/rm" -rf /app
+radio|find . -exec rm -rf {} +
+radio|find . -delete
+radio|sh -c "rm -rf /"
+radio|eval "rm -rf $HOME"
+radio|D=/; rm -rf $D
+radio|H=$HOME; rm -rf $H
+radio|rm -rf $PWD # PWD=tmp
+radio|echo PWD=tmp; rm -rf $PWD
+radio|PWD=tmp rm -rf $PWD
+radio|F=-rf; rm $F .
+radio|F=-rf; rm $F /
+radio|rm -rf ~+
+radio|rm -rf .g*
+radio|rm -rf .*
+radio|rm -rf ./.g*
+radio|rm -rf .gi?
+radio|rm -rf .?*
+radio|rm -rf .gi[t]
+radio|rm -rf {.git,dist}
+radio|rm -rf /ap*
+radio|(rm -rf .)
+radio|docker-compose exec app rm -rf /app
+radio|podman exec c rm -rf /app
+radio|sudo -u www-data rm -rf /srv/domain
+radio|rm -rf /var/www/html
+radio|eval rm -rf .
+radio|eval rm -rf /
+radio|eval rm -rf $PWD
+radio|nice eval rm -rf .
+radio|sudo eval rm -rf /srv/domain
+radio-indecidible|rm -rf $DIR
+radio-indecidible|rm -rf $D; D=/tmp/x
+radio-indecidible|rm -rf ${DIR:-/}
+radio-indecidible|rm -rf ~ubuntu/app
+radio-indecidible|rm -rf ~-
+sensible|eval rm -f .env.qa
+sql|eval psql -c "DROP TABLE observations"
+sensible|rm -f .env.qa
+sensible|rm deploy/server.pem
+sensible|rm config/id_rsa
+sensible|rm secrets/app-credentials.json
+sql|psql -c "DROP TABLE observations"
+sql|docker exec pg psql -U postgres -c "DROP DATABASE domain"
+sql|mysql -e "DROP SCHEMA app"
+sql|psql -c "TRUNCATE observations"
+sql|psql -c "DELETE FROM observations"
+sql|psql -c "DROP/**/TABLE observations"
+sql|psql -c "DELETE FROM observations WHERE true"
+sql|psql -c "ALTER TABLE observations DROP COLUMN body"
+sql|echo 'DROP TABLE observations' | psql
+sql-opaco|psql -f migrate.sql
+sql-opaco|psql < dump.sql
+DESTRS
+
+# el heredoc con terminador INDENTADO (<<-SQL con tabs) evadía el enmascarado
+sql_hd='psql -U domain <<-SQL
+	TRUNCATE observations;
+	SQL'
+check_contains "destructive-guard: heredoc con terminador indentado" '[sql]' \
+  "$(run "$(payload destr-sess "$sql_hd")")"
+
+# TERCERA RONDA. Estos tres no entran en el heredoc de arriba porque su quoting ES el
+# caso: van con el comando armado a mano.
+#   1. colisión de apóstrofos: el pareo de comillas simples se comía el rm del medio, así
+#      que el comando pasaba ENTERO.
+apostrofos='echo "it'"'"'s" && rm -rf . && echo "that'"'"'s"'
+check_contains "destructive-guard: apóstrofos vecinos no esconden el rm" '[radio]' \
+  "$(run "$(payload destr-sess "$apostrofos")")"
+#   2. comilla doble ANIDADA con escape: el literal interno quedaba invisible (era el
+#      hueco 6 del header, ahora cerrado por el escáner izquierda-a-derecha).
+anidada='docker exec pg sh -c "psql -c \"DROP TABLE observations\""'
+check_contains "destructive-guard: comilla doble anidada con escape" '[sql]' \
+  "$(run "$(payload destr-sess "$anidada")")"
+#   3. el marker de bypass con el path ENTERO en una variable: el literal
+#      destructive-bypass no está en la línea y el chequeo no lo veía.
+marker_var='M=$HOME/.local/state/domain/destructive-bypass-x; echo razon > $M'
+check_contains "destructive-guard: el marker por variable sigue siendo automarker" \
+  '[automarker]' "$(run "$(payload destr-sess "$marker_var")")"
+#   Y su contra-prueba: el UPDATE con WHERE real dentro de comillas anidadas NO es
+#   destructivo. El pareo viejo lo partía y disparaba: 2 falsos positivos medidos sobre
+#   11.358 comandos reales.
+where_ok='docker exec db sh -c '"'"'mysql -u a d -e "UPDATE users SET role=\"x\" WHERE id=1;"'"'"''
+check_not_contains "destructive-guard NO dispara: UPDATE con WHERE anidado" \
+  'destructive-guard' "$(run "$(payload dro-sess "$where_ok")")"
+
+# 21) CONTRA-PRUEBAS del 20. Si alguna falla, el guard es RUIDO: el humano lo aprueba
+#     por reflejo y deja de proteger. Las primeras son el linaje DOMAINSERV-114 + 146
+#     (el literal viaja DENTRO del patrón de un comando read-only); las del medio son la
+#     clase que producía el 79% de los disparos medidos y que SALIÓ del alcance.
+while IFS= read -r ro; do
+  check_not_contains "destructive-guard NO dispara: $ro" 'destructive-guard' \
+    "$(run "$(payload dro-sess "$ro")")"
+done <<'DROS'
+grep "rm -rf /" install-user/hooks/domain-pre-edit.sh
+rg -n "DROP TABLE" services/domain-mcp/internal/migrate/migrations/
+git log -S "rm -rf"
+grep -n 'rm -f' install-user/hooks/domain-pre-edit.sh
+grep -rn "destructive-bypass" install-user/
+psql -c "DELETE FROM observations WHERE id = 1"
+psql -c "UPDATE observations SET body = 'x' WHERE id = 1"
+psql -c "SELECT count(*) FROM observations"
+echo "SELECT 1" | psql
+mysql -f -e "SELECT 1"
+rm -f $SOCK
+rm -f /tmp/domain.sock
+rm -f coverage.out
+rm notas.md
+rm -rf node_modules
+rm -rf dist
+rm -rf build
+rm -rf vendor
+rm -rf target
+rm -rf .next
+rm -rf ./dist
+rm -rf coverage
+rm -rf .git/index.lock
+rm -rf /tmp/build
+rm -rf $HOME/.claude
+rm -rf ~/.cache/go-build
+rm -rf "$BUILD_DIR/dist"
+WT=/tmp/claude/wt; rm -rf "$WT"
+d=$(mktemp -d); cd $d; rm -rf $d
+SB=/tmp/sab; rm -rf $SB; mkdir -p $SB
+docker ps --format '{{.Names}}' | grep -i mysql
+which mysql 2>/dev/null || echo no-mysql
+printf 'select 1' | ssh host 'psql -f -'
+rm -f .env.example
+rm /tmp/no-secret.txt
+docker rm docker-ace-did-app
+docker run --rm alpine echo hola
+docker run --rm -v /repo:/app alpine rm -rf /app/dist
+docker exec ctr rm -rf node_modules
+ssh host "ls -la /srv"
+ls -la /usr/bin/rm
+find . -name "*.log" | xargs rm -f
+find . -type d -name node_modules -exec rm -rf {} +
+for f in *.log; do rm -f $f; done
+rm -rf node_modules/*
+rm -rf dist/*
+rm -rf coverage*
+rm -rf ~/.cache/go-build/*
+rm -rf /tmp/build/*
+rm -f *.log
+rm -f coverage.*
+rm -rf ?
+rm -rf ..?*
+ls -la # ojo con rm -rf /
+DROS
+
+# El propio hook contiene `rm -f "$bypass"` para consumir el marker del commit-gate: un
+# commit que DOCUMENTE este guard no puede auto-bloquearse. El git-guard cayó en esa
+# trampa exacta (ver su comentario en el bloque A).
+check_not_contains "destructive-guard ignora el rm que documenta el commit" 'destructive-guard' \
+  "$(run "$(payload dro-sess 'git commit -m "feat(guard): bloquea rm -rf / y DROP TABLE"')")"
+msg_hd='git commit -F - <<MSG
+feat: el guard corta rm -rf / y TRUNCATE
+MSG'
+check_not_contains "destructive-guard ignora menciones en heredoc" 'destructive-guard' \
+  "$(run "$(payload dro-sess "$msg_hd")")"
+# DOMAINSERV-114 en su forma mas filosa: el cuerpo del heredoc ARRANCA con el comando.
+# Sin el enmascarado de literales, el salto de linea parte el heredoc en segmentos y esa
+# linea se lee como un comando a ejecutar.
+msg_hd2='git commit -F - <<MSG
+rm -rf / ya no se corre a mano: lo hace el installer
+MSG'
+check_not_contains "destructive-guard ignora un mensaje que ARRANCA con rm -rf" 'destructive-guard' \
+  "$(run "$(payload dro-sess "$msg_hd2")")"
+# terminador de heredoc INDENTADO: DOCUMENTAR el guard con tabs se auto-bloqueaba
+doc_hd='cat >> notas.md <<-DOC
+	rm -rf / es lo que el guard bloquea
+	DOC'
+check_not_contains "destructive-guard ignora un doc con heredoc indentado" 'destructive-guard' \
+  "$(run "$(payload dro-sess "$doc_hd")")"
+# el heredoc ESCRIBE un rm en un script; escribirlo no es ejecutarlo (sí lo gatea el SDD)
+esc_hd="cat > script.sh <<'EOF'
+rm -rf /
+EOF"
+check_not_contains "destructive-guard ignora un rm escrito por heredoc" 'destructive-guard' \
+  "$(run "$(payload dro-sess "$esc_hd")")"
+
+# 22) DOMAINSERV-222 — el mecanismo. acceptEdits es INTERACTIVO (shift+tab, hay humano al
+#     teclado): ahí el ask SÍ llega a una persona y el deny sería un muro sin salida. El
+#     deny duro queda SOLO para bypassPermissions. Un modo DESCONOCIDO cae en ask: un modo
+#     nuevo de Claude Code no puede volverse un deny mudo.
+modo_payload() {
+  S="$1" M="$2" C="$3" W="$FAKE_CWD" python3 -c '
+import json, os
+print(json.dumps({"session_id": os.environ["S"], "tool_name": "Bash",
+                  "permission_mode": os.environ["M"], "cwd": os.environ["W"],
+                  "tool_input": {"command": os.environ["C"]}}))'
+}
+for modo in default plan acceptEdits modoNuevoDeClaude; do
+  check_contains "destructive-guard: $modo -> ask" '"permissionDecision":"ask"' \
+    "$(run "$(modo_payload mod-sess "$modo" 'rm -rf /app')")"
+done
+check_contains "destructive-guard: bypassPermissions -> deny" '"permissionDecision":"deny"' \
+  "$(run "$(modo_payload mod-sess bypassPermissions 'rm -rf /app')")"
+check_contains "destructive-guard: el deny nombra el marker de bypass" 'destructive-bypass-' \
+  "$(run "$(payload mod-sess 'rm -rf /app')")"
+
+# 23) Bypass de UN SOLO USO: el deny en bypassPermissions es duro, así que sin esto el
+#     guard quedaría insatisfacible (mismo criterio que DOMAINSERV-195).
+printf 'hay que rearmar /app en el container de QA\n' > "$FAKE_HOME/.local/state/domain/destructive-bypass-dbyp-sess"
+check_not_contains "destructive-guard: con bypass el borrado pasa" 'destructive-guard' \
+  "$(run "$(payload dbyp-sess 'rm -rf /app')")"
+if [ -e "$FAKE_HOME/.local/state/domain/destructive-bypass-dbyp-sess" ]; then
+  printf 'FAIL: el bypass destructivo no se consumió\n'; FAILS=$((FAILS + 1))
+else
+  printf 'PASS: el bypass destructivo se consumió al usarlo\n'
+fi
+check_contains "destructive-guard: segundo borrado vuelve a bloquearse" 'destructive-guard' \
+  "$(run "$(payload dbyp-sess 'rm -rf /app')")"
+
+# 24) SABOTAJE 1: el bypass del commit-gate NO es llave maestra. Autorizar UN commit no
+#     autoriza borrar el working tree.
+printf 'razon\n' > "$FAKE_HOME/.local/state/domain/gate-bypass-cross-sess"
+check_contains "el bypass del commit-gate no abre el guard destructivo" 'destructive-guard' \
+  "$(run "$(payload cross-sess 'rm -rf /app')")"
+
+# 24b) SABOTAJE 2 (el más grave, verificado antes del fix): el agente se escribía SU
+#      PROPIO marker con un `echo >` y el rm -rf siguiente pasaba. El deny duro era
+#      decorativo contra un agente. Autorizar tiene que costar una intervención HUMANA.
+auto_marker="$FAKE_HOME/.local/state/domain/destructive-bypass-auto-sess"
+out="$(run "$(payload auto-sess "echo 'lo necesito' > $auto_marker")")"
+check_contains "el agente no puede escribirse el bypass" '[automarker]' "$out"
+if [ -e "$auto_marker" ]; then
+  printf 'FAIL: el hook creó el marker de bypass\n'; FAILS=$((FAILS + 1))
+else
+  printf 'PASS: el marker de bypass no se creó\n'
+fi
+# y un bypass VIVO no habilita renovarse: un OK humano no puede volverse una sesión
+printf 'un borrado legítimo\n' > "$auto_marker"
+check_contains "un bypass vivo no habilita renovarse" '[automarker]' \
+  "$(run "$(payload auto-sess "echo 'otro mas' > $auto_marker")")"
+if [ -e "$auto_marker" ]; then
+  printf 'PASS: el bypass no se consumió en una operación RECHAZADA\n'
+else
+  printf 'FAIL: el bypass se consumió aunque la operación fue rechazada\n'; FAILS=$((FAILS + 1))
+fi
+rm -f "$auto_marker"
+
+# 25) Defensa en profundidad: el guard va ANTES del early-exit por flow, igual que el
+#     git-guard. Un flow SDD activo autoriza EDITAR, no borrar.
+printf 'faketoken\t2099-01-01T00:00:00+00:00\tlite\n' > "$FAKE_HOME/.local/state/domain/flow-flw-sess"
+check_contains "destructive-guard aplica incluso con flow activo" 'destructive-guard' \
+  "$(run "$(payload flw-sess 'rm -rf /app')")"
+
+# 26) El guard es de BASH. Las migraciones del repo llevan DROP TABLE IF EXISTS en su
+#     .down.sql por policy: gatear el contenido de un Write dejaría el repo inmantenible.
+mig='{"session_id":"mig-sess","tool_name":"Write","permission_mode":"acceptEdits","tool_input":{"file_path":"/repo/migrations/000222_x.down.sql","content":"DROP TABLE IF EXISTS observations;\n"}}'
+check_not_contains "destructive-guard no se mete en un Write de migración" 'destructive-guard' \
+  "$(run "$mig")"
+
+# 26b) El archivo que ejecuta un cliente SQL se LEE antes de escalar: escalar a ciegas
+#      costaba 31 disparos medidos (probar migraciones en un container de descarte) y
+#      leerlo además ATRAPA el DROP que el archivo trae adentro.
+printf 'SELECT count(*) FROM observations;\n' > "$FAKE_CWD/limpio.sql"
+printf 'BEGIN;\nDROP TABLE observations;\nCOMMIT;\n' > "$FAKE_CWD/sucio.sql"
+check_not_contains "sql: archivo legible y benigno no escala" 'destructive-guard' \
+  "$(run "$(payload sqlf-sess 'psql -f limpio.sql')")"
+check_contains "sql: archivo legible con DROP dispara [sql]" '[sql]' \
+  "$(run "$(payload sqlf-sess 'psql < sucio.sql')")"
+check_contains "sql: archivo ilegible escala a [sql-opaco]" '[sql-opaco]' \
+  "$(run "$(payload sqlf-sess 'psql -f no-existe.sql')")"
+
+# 27) El radio se mide contra el cwd REAL de la sesión: el MISMO comando dispara o no
+#     según dónde esté parada. Sin el cwd del payload el guard no puede decidir esto.
+sub_cwd="$FAKE_CWD/sub/hondo"
+mkdir -p "$sub_cwd"
+check_contains "radio: un ancestro del cwd dispara" '[radio]' \
+  "$(run "$(payload radio-sess "rm -rf $FAKE_CWD" "$sub_cwd")")"
+check_not_contains "radio: un hijo del cwd no dispara" 'destructive-guard' \
+  "$(run "$(payload radio-sess 'rm -rf artefactos' "$sub_cwd")")"
 
 if [[ "$FAILS" -gt 0 ]]; then
   printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1

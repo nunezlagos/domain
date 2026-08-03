@@ -24,6 +24,18 @@
 #       (-C, -c, --git-dir, --work-tree) para evitar evasiones. Defensa en
 #       profundidad por si el permissions.deny fallara. `git stash list|show`
 #       es read-only y pasa (DOMAINSERV-111).
+#   (A2) GUARD DESTRUCTIVO (DOMAINSERV-222): lo que el git-guard NO cubre porque
+#       no se recupera con git. NO mira el FLAG, mira el RADIO DE DAÑO: rm
+#       RECURSIVO del cwd / raíz del repo / un ancestro / . / $HOME / .git / una
+#       raíz de app de container (/app /srv /repo /workspace /var/www), rm de
+#       secretos NO trackeados en git (con o sin flags), SQL destructivo, y la
+#       escritura del propio marker de bypass. Un `rm -f archivo` común NO entra
+#       (medía 79% de los disparos sobre 21.105 comandos reales). Atraviesa
+#       envolturas (docker exec/run, kubectl exec, ssh, scp, xargs, find,
+#       sh -c/eval, psql, mysql). ask en todos los modos salvo
+#       bypassPermissions, que es deny duro, con bypass de un solo uso que
+#       escribe el HUMANO. Alcance completo y HUECOS CONOCIDOS (lista real):
+#       hook_destructive_guard_test.go.
 #   (B) heurística de edición ampliada (ver arriba) para atrapar bypass.
 #   (C) COMMIT-GATE: git commit sin marker fresco de tests verificados →
 #       ask (default/plan) o deny (modos automáticos).
@@ -68,6 +80,9 @@ print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
 print("perm_mode=%s" % shlex.quote(d.get("permission_mode", "default")))
 print("tool_cmd=%s" % shlex.quote(ti.get("command", "") if isinstance(ti, dict) else ""))
 print("file_path=%s" % shlex.quote(ti.get("file_path", "") if isinstance(ti, dict) else ""))
+# DOMAINSERV-222 (radio de daño): el guard destructivo necesita saber DÓNDE está
+# parada la sesión para decidir si el objetivo de un rm -rf es el proyecto entero.
+print("payload_cwd=%s" % shlex.quote(d.get("cwd", "")))
 ' 2>/dev/null)"
 
 # DOMAINSERV-103: payload no-vacío pero no parseable como JSON → fail-closed.
@@ -111,7 +126,9 @@ cmd = sys.stdin.read()
 # rompería el normalizador de opciones globales de abajo
 # (git -C "/p" reset --hard → git  reset --hard → git --hard, un bypass).
 if not re.search(r"\b(?:bash|sh|zsh|dash|ksh)\s+(?:-\w+\s+)*-c\b|\beval\b|\bxargs\b", cmd):
-    cmd = re.sub(r"<<-?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^\2$", " LITERAL ", cmd, flags=re.M)
+    # DOMAINSERV-222: el terminador puede venir INDENTADO (<<-EOF con tabs). Con ^\2$
+    # el heredoc quedaba sin cerrar y el strip no aplicaba: mismo hueco que en (A2).
+    cmd = re.sub(r"<<[-~]?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^[ \t]*\2[ \t]*$", " LITERAL ", cmd, flags=re.M)
     cmd = re.sub(r"\x27[^\x27]*\x27", " LITERAL ", cmd)
     cmd = re.sub(r"\x22[^\x22]*\x22", " LITERAL ", cmd)
 
@@ -139,6 +156,939 @@ print("yes" if any(re.search(p, normalized) for p in pats) else "")
   fi
 fi
 
+# ─── (A2) GUARD DESTRUCTIVO (DOMAINSERV-222) — antes de cualquier early-exit ──
+# Hermano del git-guard: el git-guard cubre lo que se recupera con git, este cubre
+# lo que NO. El alcance NO mira el FLAG, mira el RADIO DE DAÑO del objetivo:
+#   - radio: rm RECURSIVO cuyo objetivo resuelve al cwd, a la raíz del repo, a un
+#     ancestro de cualquiera de los dos, a /, a $HOME, al .git, o a una raíz de app
+#     de container (/app, /srv, /repo, /workspace, /var/www, /usr/src/app);
+#   - sensible: rm de un secreto NO trackeado en git (.env*, *.key, *.pem, id_rsa,
+#     *credential*, *secret*, *.p12) — el incidente original fue `rm -f .env.qa`;
+#   - sql / sql-opaco: SQL destructivo, o un cliente SQL que ejecuta un archivo que
+#     el guard no puede leer;
+#   - automarker: el propio comando escribe el marker de bypass de este guard.
+# Un `rm -f archivo` común NO entra: medía 265 de 334 disparos sobre 21.105 comandos
+# reales (79%, dominado por `rm -f $SOCK`) y ninguno era la clase del incidente.
+# Todo esto atravesando envolturas (docker exec/run, docker-compose, podman, kubectl
+# exec, ssh, scp, xargs, find, sh -c, y eval CON y SIN comillas), porque el incidente
+# llegó envuelto.
+#
+# EL PRINCIPIO (invertido en la tercera ronda): si el objetivo de un rm recursivo no es
+# un literal que se pueda resolver con CERTEZA, se ESCALA — no se adivina. Antes el guard
+# resolvía lo que podía y, cuando no podía, concluía "no es catastrófico": fail-OPEN. Esa
+# era la causa ÚNICA de tres evasiones que parecían distintas (`rm -rf $PWD # PWD=tmp`,
+# `F=-rf; rm $F /`, `rm -rf .g*`). Costo medido del cambio: CERO disparos nuevos sobre
+# 11.358 comandos Bash únicos de 980 transcripts reales (37 → 35).
+# Alcance completo y HUECOS CONOCIDOS: hook_destructive_guard_test.go.
+if [ "$tool_name" = "Bash" ]; then
+  # cwd del payload (Claude Code lo manda) → dónde está parada la sesión. Sin él, el
+  # cwd del proceso del hook. La raíz del repo se resuelve una sola vez, read-only.
+  guard_cwd="${payload_cwd:-$PWD}"
+  guard_git_root=$(git -C "$guard_cwd" rev-parse --show-toplevel 2>/dev/null)
+  destructivo=$(printf '%s' "$tool_cmd" | DOMAIN_GUARD_CWD="$guard_cwd" DOMAIN_GUARD_GIT_ROOT="$guard_git_root" python3 -c '
+import os, re, subprocess, sys
+
+# ─── alcance ──────────────────────────────────────────────────────────────────
+SHELLS = ("sh", "bash", "zsh", "dash", "ksh")
+SQL_CLIENTES = ("psql", "mysql", "mariadb", "mysqlsh", "sqlite3")
+# Envolturas REMOTAS: el cwd y la raiz del repo del otro lado son DESCONOCIDOS, asi
+# que ahi el radio se evalua fail-closed (ver radio()). docker/kubectl solo ejecutan
+# un comando ajeno con estos subcomandos: docker rm ctr borra un container y no
+# despierta el guard.
+# TERCERA RONDA: el match era base(toks[0]) EXACTO contra "docker", asi que
+# docker-compose (v1, con guion) y podman quedaban afuera y eran evasion directa.
+REMOTAS_SUB = {"docker": ("exec", "run"), "docker-compose": ("exec", "run"),
+               "podman": ("exec", "run"), "podman-compose": ("exec", "run"),
+               "nerdctl": ("exec", "run"), "lxc": ("exec",), "incus": ("exec",),
+               "kubectl": ("exec",), "oc": ("exec",)}
+REMOTAS = ("ssh", "scp")
+# Envolturas LOCALES: el objetivo se resuelve contra el cwd real.
+# TERCERA RONDA: eval SIN comillas era una evasion total. `eval "rm -rf ."` disparaba porque
+# el comando viajaba en un literal y la recursion lo miraba adentro; `eval rm -rf .` no tiene
+# literal ninguno, asi que toks[0] quedaba en "eval", posiciones_rm no encontraba el rm en la
+# posicion 0 y NADA se evaluaba — apagaba radio, sensible y sql de un solo golpe. eval es una
+# envoltura LOCAL: lo que sigue corre en ESTE shell, con ESTE cwd.
+LOCALES = ("xargs", "find", "eval")
+WRAPPERS = ("sudo", "doas", "command", "env", "time", "timeout", "nohup", "setsid",
+            "stdbuf", "exec", "ionice", "nice")
+# flags de wrapper que CONSUMEN el token siguiente (sudo -u www-data, nice -n 10,
+# timeout -k 5). Sin esto el wrapper se pelaba pero su valor quedaba como toks[0].
+WRAP_VALOR = ("-u", "-g", "-n", "-o", "-k", "-s", "-p", "-C", "--user", "--group",
+              "--signal", "--kill-after", "--adjustment", "--class", "--classdata",
+              "--chdir", "--output")
+# gramatica de shell: estos tokens NO son el comando del segmento.
+DESCARTES = ("then", "do", "else", "elif", "if", "while", "until", "{", "(", "!",
+             "&&", "||", "|&")
+# Raices de app en containers: /app suele ser un BIND MOUNT del repo del host y no lo
+# parece. Este es el caso que mordio al usuario.
+RAICES_APP = ("/app", "/srv", "/repo", "/workspace", "/var/www", "/usr/src/app", "/code")
+EFIMEROS = ("/tmp", "/var/tmp", "/dev/shm", "/var/cache", "/var/log", "/run")
+# Subdirectorios que se regeneran: borrarlos recursivamente es rutina de desarrollo.
+RUTINA = ("node_modules", "dist", "build", "vendor", "target", ".next", ".nuxt", "out",
+          "__pycache__", ".pytest_cache", ".mypy_cache", ".venv", "venv", ".cache",
+          "tmp", "temp", "logs", "bin", "obj", ".terraform", ".gradle")
+# Archivos que NO viven en git: borrarlos no se revierte con un checkout.
+SENSIBLES = (r"^\.env(?:$|[.\-_])", r"^id_(?:rsa|dsa|ecdsa|ed25519)(?:$|\.)",
+             r"\.(?:key|pem|p12|pfx|jks)(?:$|\.)", r"credential", r"secret")
+# .env.example / secrets.md son PLANTILLA y DOC: van al repo, no son el secreto.
+EJEMPLAR = r"\.(?:example|sample|template|dist|tpl|md|rst)$"
+# mkdir es el peor de la lista: crea el marker como DIRECTORIO, y el rm -f con el que el
+# gate lo consume no borra directorios, asi que el bypass quedaba PERMANENTE
+VERBOS_ESCRITURA = ("tee", "cp", "mv", "touch", "ln", "install", "dd", "rsync", "mkdir")
+# Interpretes que pueden ESCRIBIR el marker desde su propio literal (open(...,w)).
+INTERPRETES_ESCRITURA = ("python", "python2", "python3", "node", "ruby", "perl", "php")
+# TERCERA RONDA — el mapa de asignaciones NO puede sobrescribir las variables con las que
+# el guard MIDE el radio. Envenenarlas era apagar el guard con su propia herramienta:
+# `rm -rf $PWD # PWD=tmp` resolvia a ./tmp y pasaba.
+PROTEGIDAS = ("PWD", "OLDPWD", "HOME", "CWD", "PROJECT", "PROJECT_ROOT", "REPO",
+              "REPO_ROOT", "GIT_ROOT", "ROOT", "WORKSPACE")
+# Metacaracteres de expansion de PATH. bash los resuelve; el guard los comparaba como
+# texto plano, asi que `.g*` (= .git .github .gitignore) le parecia un nombre literal.
+GLOB = "*?[]{}"
+
+
+def norm(p):
+    return os.path.normpath(p) if p else ""
+
+
+def ctx_base():
+    cwd = os.environ.get("DOMAIN_GUARD_CWD") or os.getcwd()
+    raiz = os.environ.get("DOMAIN_GUARD_GIT_ROOT") or ""
+    home = os.environ.get("HOME") or ""
+    return {"cwd": norm(cwd), "raiz": norm(raiz), "home": norm(home), "remoto": False}
+
+
+def base(tok):
+    return tok.rsplit("/", 1)[-1]
+
+
+def expandir(tok, lits):
+    def uno(m):
+        i = int(m.group(1))
+        return lits[i] if i < len(lits) else m.group(0)
+    return re.sub("\x01(\\d+)\x01", uno, tok)
+
+
+def limpiar(tok, lits):
+    # CAMBIO 2.2: expandir ANTES de base(). Sin esto el token de comando podia venir
+    # entrecomillado o con escape (rm entre comillas, \rm, /bin/rm entrecomillado) y
+    # base() miraba un placeholder.
+    t = expandir(tok, lits)
+    t = re.sub(r"^\\+", "", t)
+    t = t.strip("\x22\x27")
+    # TERCERA RONDA: el cierre del subshell viaja PEGADO al ultimo token — (rm -rf .)
+    # dejaba el objetivo como ".)" y radio() no lo reconocia. Se saca solo el parentesis
+    # que NO abrio este token, asi $(pwd) y $(mktemp -d) quedan intactos.
+    while t.endswith(")") and t.count("(") < t.count(")"):
+        t = t[:-1]
+    return t
+
+
+def enmascarar(texto, lits):
+    # El cuerpo de un heredoc y lo entrecomillado son DATOS, no comandos. No se borran:
+    # se reemplazan por un placeholder INDEXADO, asi el comando que si ejecuta su
+    # literal (sh -c, psql -c, ssh) lo recupera y mira adentro.
+    def guardar(m):
+        lits.append(m.group(m.re.groups))
+        return "\x01%d\x01" % (len(lits) - 1)
+    # CAMBIO 2.3: el terminador puede venir INDENTADO (<<-SQL con tabs). Con ^\1$ el
+    # heredoc quedaba sin cerrar: evasion y a la vez falso positivo al documentarlo.
+    texto = re.sub(r"<<[-~]?\s*[\x27\x22]?(\w+)[\x27\x22]?([\s\S]*?)^[ \t]*\1[ \t]*$",
+                   guardar, texto, flags=re.M)
+    return enmascarar_comillas(texto, lits)
+
+
+def enmascarar_comillas(texto, lits):
+    # TERCERA RONDA. Antes eran DOS regex independientes (todas las comillas simples,
+    # despues todas las dobles) y eso rompia por los dos lados:
+    #   - `echo "it\x27s" && rm -rf . && echo "that\x27s"`: los dos apostrofos de adentro
+    #     pareaban entre si y se comian el rm del medio. El comando pasaba entero.
+    #   - `sh -c "psql -c \"DROP TABLE x\""`: el escape rompia el pareo y el literal
+    #     interno quedaba invisible (era el hueco 6 del header).
+    # Un escaner IZQUIERDA-A-DERECHA respeta lo que bash respeta: la comilla que abre
+    # PRIMERO manda, y adentro de "" el backslash escapa " \ $ ` y el newline.
+    out, i, n = [], 0, len(texto)
+    while i < n:
+        c = texto[i]
+        if c == "\\" and i + 1 < n:
+            out.append(texto[i:i + 2])
+            i += 2
+            continue
+        if c == "\x27":
+            j = texto.find("\x27", i + 1)
+            if j < 0:  # comilla sin cerrar: no es un literal, es texto
+                out.append(c)
+                i += 1
+                continue
+            lits.append(texto[i + 1:j])
+            out.append("\x01%d\x01" % (len(lits) - 1))
+            i = j + 1
+            continue
+        if c == "\x22":
+            j, buf, cerrado = i + 1, [], False
+            while j < n:
+                if texto[j] == "\\" and j + 1 < n:
+                    # dentro de "" el backslash SOLO escapa estos; con el resto se queda
+                    buf.append(texto[j + 1] if texto[j + 1] in "\x22\\$`\n"
+                               else texto[j:j + 2])
+                    j += 2
+                    continue
+                if texto[j] == "\x22":
+                    cerrado = True
+                    break
+                buf.append(texto[j])
+                j += 1
+            if not cerrado:
+                out.append(c)
+                i += 1
+                continue
+            lits.append("".join(buf))
+            out.append("\x01%d\x01" % (len(lits) - 1))
+            i = j + 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def sin_comentarios(texto):
+    # Un # que abre palabra comenta hasta el fin de linea: NADA de ahi se ejecuta. Se
+    # strippea DESPUES del enmascarado, asi un # dentro de comillas ya es un placeholder.
+    # Esto es lo que convertia `rm -rf $PWD # PWD=tmp` en una asignacion falsa que
+    # sobrescribia $PWD, y de paso evita el falso positivo simetrico (`ls # rm -rf /`).
+    return re.sub(r"(?:(?<=^)|(?<=[\s;&|(]))#[^\n]*", "", texto, flags=re.M)
+
+
+def sin_continuaciones(texto):
+    return re.sub(r"\\\n", " ", texto)
+
+
+def pelar(toks, lits):
+    # Consume EN LOOP asignaciones (FOO=1), gramatica de shell (then/do/{) y wrappers
+    # con el VALOR de sus flags. Antes era un regex de una pasada que consumia la flag
+    # pero no su valor: sudo -u www-data rm -rf pasaba.
+    i, cambio = 0, True
+    while cambio and i < len(toks):
+        cambio = False
+        while i < len(toks) and (re.match(r"^\w+=", toks[i]) or toks[i] in DESCARTES):
+            i, cambio = i + 1, True
+        if i < len(toks) and base(limpiar(toks[i], lits)) in WRAPPERS:
+            w = base(limpiar(toks[i], lits))
+            i, cambio = i + 1, True
+            while i < len(toks):
+                t = toks[i]
+                if t == "--":
+                    i += 1
+                    break
+                if t.startswith("-") and len(t) > 1:
+                    i += 1
+                    if "=" not in t and t in WRAP_VALOR and i < len(toks):
+                        i += 1
+                    continue
+                if w == "timeout" and re.match(r"^\d+(?:\.\d+)?[smhd]?$", t):
+                    i += 1
+                    continue
+                if w == "env" and re.match(r"^\w+=", t):
+                    i += 1
+                    continue
+                break
+    return toks[i:]
+
+
+def dividir(texto):
+    # Los segmentos CRUDOS, en orden. Es el mismo corte que consume segmentos() y el
+    # que consume el mapa de asignaciones: el indice tiene que significar lo mismo en
+    # los dos, porque una asignacion solo vale para los segmentos POSTERIORES.
+    texto = sin_continuaciones(texto)
+    # TERCERA RONDA: `(rm -rf .)` no disparaba porque el token era "(rm". El parentesis
+    # que abre en POSICION DE COMANDO se separa; el de $( no, porque ahi el $ lo precede
+    # y esta clase no lo incluye (si se separara, $(pwd) y $(mktemp -d) se romperian).
+    texto = re.sub(r"(^|[\s;&|])\(", r"\1( ", texto, flags=re.M)
+    return re.split(r"\|\||&&|[;|\n&]", texto)
+
+
+def segmentos(texto, lits):
+    for i, seg in enumerate(dividir(texto)):
+        toks = pelar(seg.split(), lits)
+        if toks:
+            yield i, toks
+
+
+def desenvolver(toks, lits):
+    # Devuelve (cuerpo, envuelto, remoto). envuelto: no se exige que rm sea el primer
+    # token. remoto: no hay forma de resolver el radio del otro lado.
+    c0 = base(limpiar(toks[0], lits))
+    subs = REMOTAS_SUB.get(c0)
+    if subs:
+        for i, t in enumerate(toks[1:], 1):
+            if t in subs:
+                return pelar(toks[i + 1:], lits), True, True
+        return toks, False, False
+    if c0 in REMOTAS:
+        return pelar(toks[1:], lits), True, True
+    if c0 in LOCALES:
+        return pelar(toks[1:], lits), True, False
+    return toks, False, False
+
+
+def cwd_tras_cd(toks, lits, ctx, cwd_actual):
+    # Devuelve el cwd que rige DESPUES de este segmento. None cuando hay un cd que no se
+    # puede resolver: un objetivo relativo con cwd desconocido tiene que escalar, no
+    # compararse contra el cwd viejo.
+    if not toks or base(limpiar(toks[0], lits)) != "cd":
+        return cwd_actual
+    args = [t for t in toks[1:] if not limpiar(t, lits).startswith("-")]
+    if not args:
+        return ctx["home"] or cwd_actual
+    d = pre_normalizar(limpiar(args[0], lits), ctx)
+    if certeza(d) != "literal":
+        return None
+    return norm(d if d.startswith("/") else os.path.join(cwd_actual or ".", d))
+
+
+def posiciones_rm(toks, envuelto, lits, ctx=None):
+    # el NOMBRE del comando tambien puede venir de una variable (RM=rm; $RM -rf .), y
+    # comparar el token crudo contra "rm" lo dejaba pasar. Se resuelve igual que un
+    # objetivo, con el mapa posicional del segmento.
+    def es_rm(t):
+        t = limpiar(t, lits)
+        if base(t) == "rm":
+            return True
+        return ctx is not None and base(pre_normalizar(t, ctx)) == "rm"
+    if envuelto:
+        return [i for i, t in enumerate(toks) if es_rm(t)]
+    return [0] if es_rm(toks[0]) else []
+
+
+def fin_de_valor(s, i):
+    # Donde termina el valor de una asignacion. Respeta $( ) para que d=$(mktemp -d) sea
+    # UN valor y no "d=$(mktemp" mas un token suelto.
+    prof, n = 0, len(s)
+    while i < n:
+        c = s[i]
+        if s[i:i + 2] == "$(":
+            prof += 1
+            i += 2
+            continue
+        if c == "(" and prof:
+            prof += 1
+        elif c == ")" and prof:
+            prof -= 1
+        elif not prof and (c.isspace() or c in ";&|"):
+            break
+        i += 1
+    return i
+
+
+def asignaciones_de(seg, lits):
+    # Las asignaciones REALES de un segmento, con la semantica de bash:
+    #
+    #   1. tienen que estar al PRINCIPIO del segmento (tras un export/declare opcional);
+    #   2. si despues de ellas queda un COMANDO, son un prefijo de ENTORNO y NO cambian
+    #      las variables del shell: bash expande los argumentos ANTES de armar ese
+    #      entorno, asi que `PWD=tmp rm -rf $PWD` borra el cwd REAL. Se descartan.
+    #
+    # El barrido viejo era re.findall de (\w+)=(\S*) sobre el TEXTO ENTERO, sin distinguir
+    # una asignacion de un comentario, de un argumento ni de un prefijo de entorno. Eso
+    # daba un mapa que APAGABA el guard: `rm -rf $PWD # PWD=tmp`, `echo PWD=tmp; rm -rf
+    # $PWD` y `PWD=tmp rm -rf $PWD` pasaban los tres.
+    vals, i, n = {}, 0, len(seg)
+    while True:
+        m = re.compile(r"\s*(?:(?:export|declare|local|readonly|typeset)\s+)*"
+                       r"(\w+)=").match(seg, i)
+        if not m:
+            break
+        j = fin_de_valor(seg, m.end())
+        vals[m.group(1)] = limpiar(seg[m.end():j], lits)
+        i = j
+    if seg[i:].strip():
+        return {}  # prefijo de entorno: no toca el shell
+    # PROTEGIDAS: ninguna asignacion puede redefinir con que se mide el radio.
+    return {k: v for k, v in vals.items() if v and k not in PROTEGIDAS}
+
+
+def mapa_por_segmento(texto, lits, base_vars):
+    # Para cada segmento, el mapa VIGENTE justo antes de ejecutarlo. Con esto una
+    # asignacion POSTERIOR ya no resuelve un objetivo anterior (`rm -rf $D; D=/tmp/x`
+    # queda indecidible, que es lo correcto: cuando el rm corre, D no vale nada).
+    acc, salida = dict(base_vars or {}), []
+    for seg in dividir(texto):
+        salida.append(dict(acc))
+        for k, v in asignaciones_de(seg, lits).items():
+            # si la misma var se asigna dos veces distinto, queda sin resolver y manda
+            # el fail-closed
+            acc[k] = None if (k in acc and acc[k] != v) else v
+        acc = {k: v for k, v in acc.items() if v}
+    salida.append(dict(acc))  # el estado FINAL: lo usa el chequeo del automarker
+    return salida
+
+
+def pre_normalizar(t, ctx):
+    t = t.strip().strip("\x22\x27")
+    # TERCERA RONDA: el escape INTERIOR. En una palabra sin comillas bash resuelve \X a X
+    # (verificado read-only: echo .gi\t imprime .git), y el guard lo comparaba como texto,
+    # asi que .gi\t y ./\.git no se reconocian como el .git. Va aca y no en limpiar()
+    # porque limpiar() tambien procesa el token de COMANDO y el \; de find -exec.
+    t = re.sub(r"\\(.)", r"\1", t)
+    # las vars del propio comando PRIMERO: asi una cadena H=$HOME; rm -rf $H termina
+    # resolviendo a $HOME y de ahi al path real
+    vals = ctx.get("vars") or {}
+    if vals:
+        t = re.sub(r"\$\{(\w+)\}|\$(\w+)",
+                   lambda m: vals.get(m.group(1) or m.group(2), m.group(0)), t)
+    t = re.sub(r"\$\((?:pwd|PWD)\)|`pwd`", "$PWD", t)
+    t = re.sub(r"^\$\{PWD\}", "$PWD", t)
+    if not ctx["remoto"]:
+        # ~+ es literalmente $PWD (verificado: echo ~+ imprime el cwd). Le faltaba, y
+        # `rm -rf ~+` pasaba como si fuera un nombre de archivo raro.
+        t = re.sub(r"^~\+(?=/|$)", ctx["cwd"] or ".", t)
+        t = re.sub(r"^\$PWD(?=/|$)", ctx["cwd"] or ".", t)
+        if ctx["home"]:
+            t = re.sub(r"^~(?=/|$)", ctx["home"], t)
+            t = re.sub(r"^\$\{?HOME\}?(?=/|$)", ctx["home"], t)
+    return t
+
+
+def certeza(o):
+    # Que tan resoluble es el objetivo. Es el eje de la TERCERA RONDA: el guard resolvia
+    # lo que podia y, cuando NO podia, concluia "no es catastrofico" — fail-OPEN. Ahora la
+    # clase decide, y solo "literal" habilita comparar paths como texto.
+    #
+    #   opaco  el valor no se conoce: $VAR sin resolver, $(...), backticks, ~- ($OLDPWD),
+    #          ~usuario (el home de OTRO), ${VAR:-x} con operador.
+    #   glob   el valor lo produce BASH expandiendo metacaracteres (* ? [ ] { }).
+    #   literal el path es exactamente lo que dice.
+    if "$" in o or "`" in o or o.startswith("~"):
+        return "opaco"
+    return "glob" if any(c in o for c in GLOB) else "literal"
+
+
+def flags_objetivos(args, lits, ctx):
+    rec, objetivos, incierto = False, [], False
+    for a in args:
+        t = limpiar(a, lits)
+        if t in ("-", "--", "+", "{}", ";", ")", "\\;"):
+            continue
+        # TERCERA RONDA: pre_normalizar va ANTES de clasificar. Con el orden invertido,
+        # `F=-rf; rm $F .` caia en objetivos (no empieza con "-" TODAVIA), rec quedaba en
+        # False y la rama entera del radio se salteaba: era rm -rf del cwd, y pasaba.
+        p = pre_normalizar(t, ctx)
+        if p.startswith("--"):
+            if p in ("--recursive", "--recursive=true"):
+                rec = True
+            continue
+        if p.startswith("-") and len(p) > 1 and not p[1].isdigit():
+            if "r" in p[1:] or "R" in p[1:]:
+                rec = True
+            continue
+        objetivos.append(p)
+        if certeza(p) != "literal":
+            incierto = True
+    return rec, objetivos, incierto
+
+
+def igual_o_ancestro(a, b):
+    if not a or not b:
+        return False
+    a = a.rstrip("/") or "/"
+    b = b.rstrip("/") or "/"
+    return a == "/" or a == b or b.startswith(a + "/")
+
+
+def bajo(a, prefijos):
+    a = a.rstrip("/") or "/"
+    return any(a == p or a.startswith(p + "/") for p in prefijos)
+
+
+def rutinario(a):
+    b = base(a.rstrip("/"))
+    return b in RUTINA or b.startswith("coverage")
+
+
+def sufijo_concreto(o):
+    # $DIR/build no puede SER el proyecto ni un ancestro: hay al menos un componente
+    # concreto despues de la expansion. $DIR solo, si.
+    partes = o.split("/")
+    ult = max([i for i, p in enumerate(partes) if "$" in p or "`" in p] or [-1])
+    cola = [p for p in partes[ult + 1:] if p]
+    if not cola:
+        return False
+    # TERCERA RONDA: antes solo se exigia que la cola no fuera . ni .. ni llevara *. Con
+    # eso ${DIR:-/} contaba como sufijo concreto (su cola era "}") y el fail-closed no
+    # corria; lo mismo ~usuario. Ahora la cola tiene que ser un nombre LITERAL.
+    return all(re.match(r"^[\w.@+-]+$", p) and p not in ("..", ".") for p in cola)
+
+
+def ancestros(p):
+    out, p = [], (p or "").rstrip("/")
+    while p and p != "/":
+        out.append(p)
+        p = os.path.dirname(p)
+    out.append("/")
+    return out
+
+
+def candidatos_radio(ctx):
+    # El conjunto EXACTO de paths cuyo borrado radio() considera catastrofico. Se usa para
+    # decidir si un GLOB puede expandir a alguno de ellos, en vez de compararlo como texto.
+    c = ["/"]
+    for p in (ctx["cwd"], ctx["raiz"], ctx["home"]):
+        if p:
+            c.extend(ancestros(p))
+            c.append(os.path.join(p, ".git"))
+    for r in RAICES_APP:
+        c.extend(ancestros(r))
+    return set(c)
+
+
+def glob_cuerpo(g):
+    # glob de shell -> regex. * no cruza barras, ** si, {a,b} es alternancia, [!x] niega.
+    out, i, n = [], 0, len(g)
+    while i < n:
+        c = g[i]
+        if c == "*":
+            out.append(".*" if g[i:i + 2] == "**" else "[^/]*")
+            i += 2 if g[i:i + 2] == "**" else 1
+            continue
+        if c == "?":
+            out.append("[^/]")
+            i += 1
+            continue
+        if c == "[":
+            j = g.find("]", i + 2)
+            if j > 0:
+                cuerpo = g[i + 1:j]
+                if cuerpo[:1] in ("!", "^"):
+                    cuerpo = "^" + cuerpo[1:]
+                out.append("[" + cuerpo + "]")
+                i = j + 1
+                continue
+        if c == "{":
+            j = g.find("}", i + 1)
+            if j > 0:
+                out.append("(?:" + "|".join(glob_cuerpo(a) for a in g[i + 1:j].split(","))
+                           + ")")
+                i = j + 1
+                continue
+        out.append(re.escape(c))
+        i += 1
+    return "".join(out)
+
+
+def alcanza_radio(o, ctx):
+    a = norm(o if o.startswith("/") else os.path.join(ctx["cwd"] or ".", o))
+    try:
+        rx = re.compile("^" + glob_cuerpo(a) + "$")
+    except re.error:
+        return True  # un patron que no se puede modelar no se declara benigno
+    return any(rx.match(c) for c in candidatos_radio(ctx))
+
+
+def radio_glob(o, ctx):
+    # TERCERA RONDA. El guard solo trataba el glob trailing /*, asi que `.g*` (= .git
+    # .github .gitignore), `.*`, `.gi?`, `{.git,dist}` y `/ap*` le parecian nombres
+    # literales y pasaban. Y el ruido va del otro lado: node_modules/* o coverage* NO
+    # pueden escalar. Las dos reglas juntas dan las dos cosas:
+    #   1. D/* es "vaciar D", que equivale a borrar D (asi ya disparaban /*, ./* y ../*);
+    #   2. el patron se convierte a regex y se prueba contra candidatos_radio(): si PUEDE
+    #      expandir al cwd, al proyecto, a un ancestro o al .git, escala; si su prefijo
+    #      literal ya lo encierra en un subdirectorio acotado, no matchea nada y pasa.
+    d = re.sub(r"/\*+$", "/", o)
+    if d in ("*", "*/"):
+        d = "."
+    if certeza(d) == "literal" and radio(d, ctx):
+        return "radio"
+    return "radio" if alcanza_radio(o, ctx) else ""
+
+
+def radio(o, ctx):
+    # ¿el objetivo de un rm RECURSIVO tiene radio catastrofico?
+    o = (o or "").strip()
+    if not o:
+        return False
+    g = re.sub(r"/\*+$", "/", o)
+    if g in ("*", "*/"):
+        g = "."
+    # el .git ENTERO (no un archivo de adentro: rm -rf .git/index.lock es rutina) es el
+    # radio maximo posible — se lleva puesto justo lo que hace recuperable a todo lo demas
+    if base(g.rstrip("/")) == ".git":
+        return True
+    if ctx["remoto"]:
+        if g in (".", "./", "$PWD", "$PWD/", "${PWD}"):
+            return True
+        if g in ("~", "~/", "$HOME", "$HOME/", "${HOME}", "${HOME}/"):
+            return True
+        if g == ".." or g == "../" or g.startswith("../"):
+            return True
+        if not g.startswith("/"):
+            return False
+        a = norm(g)
+        if a == "/":
+            return True
+        if re.match(r"^/home(?:/[^/]+)?/?$", a):
+            return True
+        if rutinario(a) or bajo(a, EFIMEROS):
+            return False
+        # container/host remoto: cualquier absoluto puede ser un bind mount del repo
+        return True
+    if g in ("$PWD", "$PWD/", "${PWD}", "$HOME", "$HOME/", "${HOME}", "~", "~/"):
+        return True
+    a = norm(g if g.startswith("/") else os.path.join(ctx["cwd"] or ".", g))
+    if a == "/":
+        return True
+    if igual_o_ancestro(a, ctx["cwd"]):
+        return True
+    if ctx["raiz"] and igual_o_ancestro(a, ctx["raiz"]):
+        return True
+    if ctx["home"] and igual_o_ancestro(a, ctx["home"]):
+        return True
+    if re.match(r"^/home(?:/[^/]+)?/?$", a):
+        return True
+    if any(igual_o_ancestro(a, r) for r in RAICES_APP):
+        return True
+    # TERCERA RONDA: /srv/<app> y /var/www/<sitio> SON la app desplegada, no un
+    # subdirectorio cualquiera de ella — el evasor medido era `sudo -u www-data rm -rf
+    # /srv/domain`, que es exactamente el deploy de este repo. Un hijo de RUTINA
+    # (/app/dist, /app/node_modules) sigue siendo rutina y no llega aca.
+    return os.path.dirname(a.rstrip("/") or "/") in RAICES_APP and not rutinario(a)
+
+
+def trackeado(a, ctx):
+    d = os.path.dirname(a) or (ctx["cwd"] or ".")
+    try:
+        r = subprocess.run(["git", "-C", d, "ls-files", "--error-unmatch", "--", base(a)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def sensible_path(o, ctx):
+    b = base(o).lower()
+    if not b or b in (".", ".."):
+        return False
+    if re.search(EJEMPLAR, b):
+        return False
+    if not any(re.search(p, b) for p in SENSIBLES):
+        return False
+    if not ctx["remoto"]:
+        a = norm(o if o.startswith("/") else os.path.join(ctx["cwd"] or ".", o))
+        # un secreto suelto en /tmp es una COPIA de scratch, no el original del repo
+        # (falso positivo medido: rm /tmp/no-secret.txt). Se exige que NO cuelgue del
+        # cwd ni del HOME, porque un cwd bajo /tmp sigue siendo el proyecto parado.
+        if bajo(a, EFIMEROS) and not bajo(a, [p for p in (ctx["cwd"], ctx["home"]) if p]):
+            return False
+        # trackeado en git: git checkout -- lo recupera y manda el git-guard
+        if trackeado(a, ctx):
+            return False
+    return True
+
+
+def rm_peligroso(args, lits, ctx):
+    # EL PRINCIPIO (tercera ronda): si el objetivo de un rm RECURSIVO no es un literal que
+    # se pueda resolver con CERTEZA, se ESCALA. Antes el guard intentaba resolver y, cuando
+    # no podia, concluia "no es catastrofico" — fail-OPEN, y era la causa unica de los tres
+    # bugs que el juez encontro.
+    rec, objetivos, incierto = flags_objetivos(args, lits, ctx)
+    # un rm recursivo SIN objetivo explicito lo recibe por stdin (echo . | xargs rm -rf):
+    # el objetivo no esta en el texto, asi que no hay nada que resolver y se escala.
+    # Excepcion: en `find ... -exec rm -rf {} +` el objetivo lo pone find y es find_peligroso
+    # quien mira sus filtros — sin esto, borrar node_modules con find pasaba a ser ruido.
+    if rec and not objetivos and not any("{}" in limpiar(a, lits) for a in args):
+        return "radio-indecidible"
+    if rec or incierto:
+        for o in objetivos:
+            clase = certeza(o)
+            if clase == "opaco":
+                # del otro lado del ssh/docker no hay cwd, pero $PWD/$HOME/~ siguen
+                # significando algo catastrofico: radio() ya los cubre.
+                if ctx["remoto"] and radio(o, ctx):
+                    return "radio"
+                # un valor derivado de mktemp es un directorio NUEVO por construccion:
+                # no puede ser el proyecto ni un ancestro
+                if "mktemp" in o:
+                    continue
+                # fail-closed: no se puede resolver el objetivo de un rm recursivo
+                if rec and not sufijo_concreto(o):
+                    return "radio-indecidible"
+                continue
+            if clase == "glob":
+                # un glob NO recursivo borra archivos de un directorio, no el arbol:
+                # rm -f *.log es rutina y no puede costar un disparo.
+                if not rec:
+                    continue
+                motivo = ("radio" if radio(o, ctx) else "") if ctx["remoto"] \
+                    else radio_glob(o, ctx)
+                if motivo:
+                    return motivo
+                continue
+            if radio(o, ctx):
+                return "radio"
+    for o in objetivos:
+        if certeza(o) != "literal":
+            continue
+        if sensible_path(o, ctx):
+            return "sensible"
+    return ""
+
+
+def find_peligroso(toks, lits, ctx):
+    if base(limpiar(toks[0], lits)) != "find":
+        return ""
+    resto = toks[1:]
+    raices = []
+    for t in resto:
+        if t.startswith("-") or t in ("(", "!", ")"):
+            break
+        raices.append(t)
+    borra, filtrado = False, False
+    for i, t in enumerate(resto):
+        if t == "-delete":
+            borra = True
+        if t in ("-exec", "-execdir", "-ok", "-okdir") and any(
+                base(limpiar(x, lits)) in ("rm", "shred", "unlink")
+                for x in resto[i + 1:i + 3]):
+            borra = True
+        if t in ("-name", "-iname", "-path", "-ipath", "-regex", "-wholename"):
+            pat = limpiar(resto[i + 1], lits) if i + 1 < len(resto) else ""
+            if pat not in ("*", ".*", ""):
+                filtrado = True
+    if not borra or filtrado:
+        return ""
+    for r in raices:
+        if radio(pre_normalizar(limpiar(r, lits), ctx), ctx):
+            return "radio"
+    return ""
+
+
+def sql_destructivo(sql):
+    # CAMBIO 2.8: /*…*/ primero — DROP/**/TABLE evadia y un /* WHERE */ comentado
+    # apagaba la regla.
+    limpio = re.sub(r"/\*[\s\S]*?\*/", " ", sql)
+    limpio = re.sub(r"--[^\n]*", " ", limpio)
+    for st in limpio.split(";"):
+        if re.search(r"\bDROP\s+(?:DATABASE|TABLE|SCHEMA|OWNED\s+BY|ROLE|USER|INDEX"
+                     r"|VIEW|MATERIALIZED\s+VIEW|TYPE|EXTENSION|SEQUENCE|FUNCTION"
+                     r"|TRIGGER|TABLESPACE)\b", st, re.I):
+            return True
+        if re.search(r"\bALTER\s+TABLE\b[\s\S]*?\bDROP\s+(?:COLUMN|CONSTRAINT)\b", st, re.I):
+            return True
+        if re.search(r"\bTRUNCATE\b", st, re.I):
+            return True
+        # WHERE true / WHERE 1=1 no filtra NADA: es un DELETE completo con disfraz
+        sw = re.sub(r"\bWHERE\s+(?:true|1\s*=\s*1)\b", " ", st, flags=re.I)
+        if re.search(r"\bWHERE\b", sw, re.I):
+            continue
+        if re.search(r"\bDELETE\s+FROM\b", sw, re.I):
+            return True
+        if re.search(r"\bUPDATE\b[\s\S]*?\bSET\b", sw, re.I):
+            return True
+    return False
+
+
+def literales_de(toks, lits):
+    idx = re.findall("\x01(\\d+)\x01", " ".join(toks))
+    return [lits[int(i)] for i in idx if int(i) < len(lits)]
+
+
+def tiene_cliente(parte, lits):
+    # El cliente tiene que estar en POSICION DE COMANDO (mismo criterio que
+    # DOMAINSERV-146 para rm). Con any(token) alcanzaba que la palabra apareciera:
+    # `docker ps | grep -i mysql` y `which mysql` disparaban sql-opaco.
+    toks = pelar(parte.split(), lits)
+    if not toks:
+        return False
+    cuerpo, envuelto, _ = desenvolver(toks, lits)
+    if not cuerpo:
+        return False
+    if base(limpiar(cuerpo[0], lits)) in SQL_CLIENTES:
+        return True
+    return envuelto and any(base(limpiar(t, lits)) in SQL_CLIENTES for t in cuerpo)
+
+
+def sql_de_archivo(path, ctx):
+    # El archivo que el cliente SQL va a ejecutar: si se puede LEER, se analiza (mucho
+    # mejor que escalar a ciegas); si no, se escala. `-f -` es stdin y lo cubre el
+    # analisis del pipeline. Con ctx remoto el path es del OTRO lado: no se lee.
+    if path in ("-", "/dev/stdin"):
+        return ""
+    if ctx["remoto"]:
+        return "sql-opaco"
+    p = pre_normalizar(path, ctx)
+    if "$" in p or "`" in p or "*" in p:
+        return "sql-opaco"
+    a = p if p.startswith("/") else os.path.join(ctx["cwd"] or ".", p)
+    try:
+        if os.path.getsize(a) > 262144:
+            return "sql-opaco"
+        with open(a, errors="replace") as f:
+            texto = f.read()
+    except Exception:
+        return "sql-opaco"
+    return "sql" if sql_destructivo(texto) else ""
+
+
+def archivos_sql(tramo, toks, lits):
+    paths = []
+    for m in re.finditer(r"(?<!<)<(?!<)\s*([^\s;|&<>]+)", tramo):
+        paths.append(limpiar(m.group(1), lits))
+    for i, t in enumerate(toks):
+        if not any(base(x) == "psql" for x in toks):
+            break
+        if t in ("-f", "--file") and i + 1 < len(toks):
+            paths.append(limpiar(toks[i + 1], lits))
+        elif t.startswith("--file="):
+            paths.append(limpiar(t.split("=", 1)[1], lits))
+    return paths
+
+
+def sql_en_pipeline(texto, lits, ctx):
+    # CAMBIO 2.8: el PIPELINE completo. Antes se miraba segmento por segmento y el
+    # pipe los separaba: echo "DROP TABLE x" | psql pasaba.
+    for tramo in re.split(r"&&|\|\||[;\n]", sin_continuaciones(texto)):
+        partes = tramo.split("|")
+        con = [i for i, p in enumerate(partes) if tiene_cliente(p, lits)]
+        if not con:
+            continue
+        toks = tramo.split()
+        adentro = literales_de(toks, lits)
+        if any(sql_destructivo(s) for s in adentro):
+            return "sql"
+        # el archivo que ejecuta el cliente: se LEE si se puede, y si no se escala
+        for p in archivos_sql(tramo, toks, lits):
+            m = sql_de_archivo(p, ctx)
+            if m:
+                return m
+        if any(re.search(r"\\ir?\s", s) for s in adentro):
+            return "sql-opaco"
+        if con[0] > 0:
+            arriba = partes[0].split()
+            if arriba and base(limpiar(arriba[0], lits)) not in ("echo", "printf"):
+                return "sql-opaco"
+    return ""
+
+
+def escribe_automarker(texto, lits, ctx):
+    # CAMBIO 3: el agente podia escribirse el marker de bypass con un echo >. Autorizar
+    # un borrado tiene que costar una intervencion HUMANA, no una llamada de Bash.
+    def apunta(t):
+        t = expandir(t, lits)
+        # TERCERA RONDA: el path puede venir ENTERO en una variable, y ahi el literal
+        # "destructive-bypass" no esta en la linea — M=$HOME/...-bypass-x; echo r > $M.
+        return "destructive-bypass" in t or "destructive-bypass" in pre_normalizar(t, ctx)
+    for m in re.finditer(r">>?\s*([^\s;|&<>]+)", texto):
+        if apunta(m.group(1)):
+            return True
+    for _, toks in segmentos(texto, lits):
+        c0 = base(limpiar(toks[0], lits))
+        # un interprete escribe desde su propio literal, sin pasar por una redireccion:
+        # python3 -c "open(...,\x27w\x27)". grep/ls NO estan en estas listas, asi que
+        # inspeccionar el marker sigue siendo gratis.
+        if c0 in VERBOS_ESCRITURA or c0 in INTERPRETES_ESCRITURA:
+            if any(apunta(t) for t in toks[1:]):
+                return True
+    return False
+
+
+def hay_interprete(toks, lits):
+    for i, t in enumerate(toks):
+        b = base(limpiar(t, lits))
+        if b == "eval":
+            return True
+        if b in SHELLS and any(re.match(r"^-\w*c$", limpiar(x, lits))
+                               for x in toks[i + 1:i + 4]):
+            return True
+    return False
+
+
+def destructivo(texto, lits=None, hondura=0, ctx=None):
+    lits = [] if lits is None else lits
+    ctx = ctx_base() if ctx is None else ctx
+    texto = sin_comentarios(enmascarar(texto, lits))
+    # El mapa de asignaciones es POSICIONAL: mapas[i] es lo que vale justo antes del
+    # segmento i, y mapas[-1] el estado final. Sin esto una asignacion POSTERIOR resolvia
+    # un objetivo anterior (rm -rf $D; D=/tmp/x pasaba como si D valiera /tmp/x).
+    mapas = mapa_por_segmento(texto, lits, ctx.get("vars"))
+    final = dict(ctx, vars=mapas[-1])
+    if escribe_automarker(texto, lits, final):
+        return "automarker"
+    motivo = sql_en_pipeline(texto, lits, final)
+    if motivo:
+        return motivo
+    # el cwd puede cambiar DENTRO del mismo comando: cd <padre> && rm -rf <proyecto> es el
+    # proyecto entero, escrito como nombre relativo. Se sigue el cd cuando el destino es
+    # literal, y si no se puede resolver el cwd queda en None -> los relativos escalan.
+    cwd_vivo = ctx["cwd"]
+    for idx, toks in segmentos(texto, lits):
+        cur = dict(ctx, cwd=cwd_vivo, vars=mapas[idx] if idx < len(mapas) else mapas[-1])
+        cwd_vivo = cwd_tras_cd(toks, lits, cur, cwd_vivo)
+        cuerpo, envuelto, remoto = desenvolver(toks, lits)
+        if not cuerpo:
+            continue
+        sub = dict(cur)
+        sub["remoto"] = ctx["remoto"] or remoto
+        for i in posiciones_rm(cuerpo, envuelto, lits, sub):
+            motivo = rm_peligroso(cuerpo[i + 1:], lits, sub)
+            if motivo:
+                return motivo
+        motivo = find_peligroso(toks, lits, cur)
+        if motivo:
+            return motivo
+        adentro = literales_de(cuerpo, lits)
+        # CAMBIO 2.1: recursar tambien en el literal de las ENVOLTURAS. El deploy de
+        # este repo tiene la forma ssh vps "rm -rf /srv/domain" y pasaba porque solo
+        # se recursaba con sh -c/eval.
+        if hondura < 3 and adentro and (envuelto or hay_interprete(cuerpo, lits)):
+            for s in adentro:
+                motivo = destructivo(s, lits, hondura + 1, sub)
+                if motivo:
+                    return motivo
+    return ""
+
+print(destructivo(sys.stdin.read()))
+' 2>/dev/null)
+  if [ -n "$destructivo" ]; then
+    destr_bypass="$HOME/.local/state/domain/destructive-bypass-$session_id"
+    # El bypass NO habilita escribirse el propio bypass: si lo hiciera, un agente que
+    # ya consumió uno podría renovarlo solo. automarker es siempre humano-only.
+    if [ -r "$destr_bypass" ] && [ "$destructivo" != "automarker" ]; then
+      destr_razon=$(head -1 "$destr_bypass" 2>/dev/null)
+      rm -f "$destr_bypass"
+      type domain_log_injection >/dev/null 2>&1 && \
+        domain_log_injection "PreToolUse" "$session_id" \
+          "destructive-guard bypass consumido ($destructivo): ${destr_razon:-sin razón declarada}"
+    else
+      case "$destructivo" in
+        radio)
+          destr_detalle="borrado RECURSIVO cuyo objetivo es el directorio donde estás parado, la raíz del repo, un ANCESTRO de cualquiera de los dos, /, \$HOME, el .git, o una raíz de app de container (/app /srv /repo /workspace /var/www /usr/src/app — el incidente fue justo eso: /app era un bind mount del repo del host y no lo parecía). Un rm -rf de node_modules, dist, build, vendor o cualquier subdirectorio que NO sea el proyecto entero NO llega acá." ;;
+        radio-indecidible)
+          destr_detalle="borrado RECURSIVO cuyo objetivo no se puede resolver (lleva \$VAR, \$(…) o backticks sin sufijo concreto). El guard NO asume que es inofensivo: si la variable vale / o \$HOME el daño es total, así que escala." ;;
+        sensible)
+          destr_detalle="rm de un archivo SENSIBLE que NO está trackeado en git (.env*, *.key, *.pem, id_rsa, *credential*, *secret*, *.p12) — es el incidente original, \`docker exec <ctr> rm -f .env.qa\`. Un archivo trackeado no llega acá: ese lo recupera git checkout -- y lo cubre el git-guard." ;;
+        sql)
+          destr_detalle="SQL destructivo (DROP DATABASE/TABLE/SCHEMA/ROLE/INDEX/VIEW/TYPE/EXTENSION/OWNED BY, ALTER TABLE … DROP COLUMN, TRUNCATE, DELETE/UPDATE sin WHERE real — WHERE true y WHERE 1=1 cuentan como SIN where)." ;;
+        sql-opaco)
+          destr_detalle="un cliente SQL que ejecuta un archivo o un stdin que el guard NO puede leer (-f, <, \\i, un pipe que no es echo). No se puede afirmar que sea benigno, así que escala." ;;
+        automarker)
+          destr_detalle="el comando ESCRIBE el marker de bypass de este guard. Autorizar un borrado irreversible tiene que costar una intervención HUMANA fuera del agente, no una llamada de Bash del agente. Ningún bypass habilita esta operación: pedíselo al humano." ;;
+      esac
+      # acceptEdits es INTERACTIVO (se activa con shift+tab, hay humano al teclado), así
+      # que ahí un "ask" sí llega a una persona y el deny sería un muro sin salida. El
+      # deny duro queda SOLO para bypassPermissions, donde nadie ve el diálogo. Un modo
+      # DESCONOCIDO cae en ask: un modo nuevo de Claude Code no debe volverse deny mudo.
+      case "$perm_mode" in
+        bypassPermissions) destr_dec="deny" ;;
+        *)                 destr_dec="ask" ;;
+      esac
+      if [ "$destructivo" = "automarker" ]; then
+        emit_decision "$destr_dec" "domain destructive-guard (DOMAINSERV-222) [$destructivo]: $destr_detalle"
+      else
+        emit_decision "$destr_dec" "domain destructive-guard (DOMAINSERV-222) [$destructivo]: $destr_detalle Nada de esto se recupera con git. Si el borrado es legítimo, el HUMANO autoriza UNO SOLO con: echo 'tu razón' > $destr_bypass"
+      fi
+    fi
+  fi
+fi
+
 # ─── (C) COMMIT-GATE — antes del early-exit por flow ─────────────────────────
 # git commit (no --amend) exige una corrida de tests verificada en la sesión:
 # marker fresco ~/.local/state/domain/tests-ok-<session> (lo escribe el hook
@@ -163,7 +1113,8 @@ INTERPRETES = r"\b(?:bash|sh|zsh|dash|ksh)\s+(?:-\w+\s+)*-c\b|\beval\b|\bxargs\b
 # fail-closed: con un intérprete que EJECUTA el literal (sh -c "git commit"), lo
 # entrecomillado SÍ es comando y no se strippea nada
 if not re.search(INTERPRETES, cmd):
-    cmd = re.sub(r"<<-?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^\2$", " LITERAL ", cmd, flags=re.M)
+    # DOMAINSERV-222: terminador de heredoc INDENTADO (<<-MSG con tabs) — ver (A2)
+    cmd = re.sub(r"<<[-~]?\s*([\x27\x22]?)(\w+)\1[\s\S]*?^[ \t]*\2[ \t]*$", " LITERAL ", cmd, flags=re.M)
     cmd = re.sub(r"\x27[^\x27]*\x27", " LITERAL ", cmd)
     cmd = re.sub(r"\x22[^\x22]*\x22", " LITERAL ", cmd)
 

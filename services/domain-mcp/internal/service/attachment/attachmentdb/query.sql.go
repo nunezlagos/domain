@@ -188,3 +188,21 @@ func (q *Queries) PromoteEntity(ctx context.Context, arg PromoteEntityParams) (i
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateAttachmentSize = `-- name: UpdateAttachmentSize :exec
+UPDATE file_attachments
+SET size_bytes = $1
+WHERE id = $2
+`
+
+type UpdateAttachmentSizeParams struct {
+	SizeBytes int64     `json:"size_bytes"`
+	ID        uuid.UUID `json:"id"`
+}
+
+// El tamaño REAL lo da el HEAD de confirm; el de init_upload era declarado por el cliente
+// y nadie lo verificaba (DOMAINSERV-224).
+func (q *Queries) UpdateAttachmentSize(ctx context.Context, arg UpdateAttachmentSizeParams) error {
+	_, err := q.db.Exec(ctx, updateAttachmentSize, arg.SizeBytes, arg.ID)
+	return err
+}

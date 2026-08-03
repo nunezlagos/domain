@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -30,6 +31,41 @@ func stubS3(t *testing.T, status int) string {
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL
+}
+
+// stubS3ConTamano responde 200 declarando un Content-Length, que es de donde el HEAD saca
+// el tamaño real del objeto (DOMAINSERV-224).
+func stubS3ConTamano(t *testing.T, bytes int64) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", strconv.FormatInt(bytes, 10))
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// El HEAD ya trae el ContentLength y ConfirmObject lo descartaba, así que size_bytes quedaba
+// siendo el valor DECLARADO por el cliente, que nadie verificaba nunca. Medido en prod el
+// 2026-08-03: la fila quedó con 96 bytes para un objeto de 79.
+func TestClient_ConfirmObject_ObjetoPresente_DevuelveElTamanoReal(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: stubS3ConTamano(t, 79), Bucket: "test", Key: "k", Secret: "s"})
+
+	exists, size, err := c.ConfirmObject(context.Background(), "test/key")
+
+	require.NoError(t, err)
+	require.True(t, exists)
+	require.Equal(t, int64(79), size, "el tamaño sale del HEAD, no de lo que declaró el cliente")
+}
+
+func TestClient_ConfirmObject_ObjetoAusente_ElTamanoEsCero(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: stubS3(t, http.StatusNotFound), Bucket: "test", Key: "k", Secret: "s"})
+
+	exists, size, err := c.ConfirmObject(context.Background(), "test/key")
+
+	require.NoError(t, err)
+	require.False(t, exists)
+	require.Zero(t, size, "sin objeto no hay tamaño que reportar")
 }
 
 func expiresParam(t *testing.T, rawURL string) string {
@@ -95,7 +131,7 @@ func TestClient_GenerateDownloadURL_ExpiraEn1Hora(t *testing.T) {
 func TestClient_ConfirmObject_ObjetoAusente_DevuelveFalseSinError(t *testing.T) {
 	c := newTestClient(t, Config{Endpoint: stubS3(t, http.StatusNotFound), Bucket: "test", Key: "k", Secret: "s"})
 
-	exists, err := c.ConfirmObject(context.Background(), "test/key")
+	exists, _, err := c.ConfirmObject(context.Background(), "test/key")
 
 	require.NoError(t, err, "un objeto ausente es un caso normal, no un error")
 	require.False(t, exists)
@@ -104,7 +140,7 @@ func TestClient_ConfirmObject_ObjetoAusente_DevuelveFalseSinError(t *testing.T) 
 func TestClient_ConfirmObject_ObjetoPresente_DevuelveTrue(t *testing.T) {
 	c := newTestClient(t, Config{Endpoint: stubS3(t, http.StatusOK), Bucket: "test", Key: "k", Secret: "s"})
 
-	exists, err := c.ConfirmObject(context.Background(), "test/key")
+	exists, _, err := c.ConfirmObject(context.Background(), "test/key")
 
 	require.NoError(t, err)
 	require.True(t, exists)
@@ -113,7 +149,7 @@ func TestClient_ConfirmObject_ObjetoPresente_DevuelveTrue(t *testing.T) {
 func TestClient_ConfirmObject_AccesoDenegado_DevuelveError(t *testing.T) {
 	c := newTestClient(t, Config{Endpoint: stubS3(t, http.StatusForbidden), Bucket: "test", Key: "k", Secret: "s"})
 
-	exists, err := c.ConfirmObject(context.Background(), "test/key")
+	exists, _, err := c.ConfirmObject(context.Background(), "test/key")
 
 	require.Error(t, err, "un 403 no es 'el objeto no existe': credenciales o politica mal")
 	require.False(t, exists)
@@ -124,7 +160,7 @@ func TestClient_ConfirmObject_EndpointInalcanzable_DevuelveError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	exists, err := c.ConfirmObject(ctx, "test/key")
+	exists, _, err := c.ConfirmObject(ctx, "test/key")
 
 	require.Error(t, err, "storage caido no puede reportarse como objeto ausente")
 	require.False(t, exists)
@@ -135,7 +171,7 @@ func TestClient_ConfirmObject_ContextoCancelado_DevuelveError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	exists, err := c.ConfirmObject(ctx, "test/key")
+	exists, _, err := c.ConfirmObject(ctx, "test/key")
 
 	require.Error(t, err)
 	require.False(t, exists)
@@ -200,7 +236,7 @@ func TestClient_ConfirmObject_ConPublicEndpoint_UsaElInterno(t *testing.T) {
 		Secret:         "s",
 	})
 
-	exists, err := c.ConfirmObject(context.Background(), "test/key")
+	exists, _, err := c.ConfirmObject(context.Background(), "test/key")
 
 	require.NoError(t, err, "las operaciones del server van por el endpoint interno, no por el publico")
 	require.True(t, exists)

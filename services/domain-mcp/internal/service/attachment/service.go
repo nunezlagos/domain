@@ -128,12 +128,24 @@ func (s *Service) ConfirmUpload(ctx context.Context, attachmentID uuid.UUID) (*C
 		return nil, fmt.Errorf("get attachment: %w", err)
 	}
 
-	exists, err := s.S3.ConfirmObject(ctx, fa.S3Key)
+	exists, tamanoReal, err := s.S3.ConfirmObject(ctx, fa.S3Key)
 	if err != nil {
 		return nil, fmt.Errorf("confirm s3: %w", err)
 	}
 	if !exists {
 		return nil, fmt.Errorf("object not found in s3 after upload")
+	}
+	// el size_bytes de init_upload lo DECLARA el cliente y nadie lo verifica; el HEAD de
+	// arriba trae el real. Se sobreescribe en vez de rechazar: rechazar despues de un PUT
+	// exitoso deja el objeto en S3 con la fila sin confirmar, o sea un huerfano peor que el
+	// numero equivocado (DOMAINSERV-224)
+	if tamanoReal != fa.SizeBytes {
+		if err := s.q(ctx).UpdateAttachmentSize(ctx, attachmentdb.UpdateAttachmentSizeParams{
+			ID: fa.ID, SizeBytes: tamanoReal,
+		}); err != nil {
+			return nil, fmt.Errorf("update size: %w", err)
+		}
+		fa.SizeBytes = tamanoReal
 	}
 
 	dlURL, err := s.S3.GenerateDownloadURL(ctx, fa.S3Key)

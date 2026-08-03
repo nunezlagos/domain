@@ -98,19 +98,26 @@ func (c *Client) GenerateDownloadURL(ctx context.Context, key string) (string, e
 	return req.URL, nil
 }
 
-// ConfirmObject checks if an object exists in S3 (HEAD).
-func (c *Client) ConfirmObject(ctx context.Context, key string) (bool, error) {
-	_, err := c.S3.HeadObject(ctx, &s3.HeadObjectInput{
+// ConfirmObject checks if an object exists in S3 (HEAD) y devuelve su tamaño REAL.
+//
+// El tamaño viaja porque el HEAD ya lo trae: descartarlo dejaba a size_bytes siendo el valor
+// que declaró el cliente en init_upload, que nadie verificaba nunca (DOMAINSERV-224).
+func (c *Client) ConfirmObject(ctx context.Context, key string) (bool, int64, error) {
+	out, err := c.S3.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(c.Bucket),
 		Key:    aws.String(key),
 	})
 	if err == nil {
-		return true, nil
+		var size int64
+		if out.ContentLength != nil {
+			size = *out.ContentLength
+		}
+		return true, size, nil
 	}
 	if isNotFound(err) {
-		return false, nil
+		return false, 0, nil
 	}
-	return false, fmt.Errorf("head object %q: %w", key, err)
+	return false, 0, fmt.Errorf("head object %q: %w", key, err)
 }
 
 // isNotFound distingue "el objeto no esta" de cualquier otra falla. El SDK

@@ -32,3 +32,10 @@ RETURNING s3_key;
 UPDATE file_attachments
 SET entity_type = @to_type, entity_id = @to_id
 WHERE entity_type = @from_type AND entity_id = @from_id;
+
+-- name: UpdateAttachmentSize :exec
+-- El tamaño REAL lo da el HEAD de confirm; el de init_upload era declarado por el cliente
+-- y nadie lo verificaba (DOMAINSERV-224).
+UPDATE file_attachments
+SET size_bytes = @size_bytes
+WHERE id = @id;

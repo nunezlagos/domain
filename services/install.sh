@@ -224,6 +224,10 @@ declare -A CREDS=(
   # (signed_cookies + session["authenticated"]). Con la clave publicada en el
   # repo, cualquiera forjaba una sesión válida sin pasar por el login
   [DJANGO_SECRET_KEY]=DJANGO_SECRET_KEY
+  # basic auth del sidecar opencode, que es el cerebro LLM server-side default
+  # (DOMAINSERV-62). El compose defaultea a vacío, así que sin esto el par
+  # username/password viaja sin secreto por la red interna de Docker
+  [OPENCODE_SERVER_PASSWORD]=OPENCODE_SERVER_PASSWORD
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -744,6 +748,13 @@ if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
   sudo_run systemctl enable domain-services.service 2>/dev/null || true
   sudo_run systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
   ok "Units + timers systemd activos"
+  # el healthcheck corre cada 5 min y sin topic su única salida es el journal, que
+  # nadie mira: un guard que no puede avisar no está cumpliendo (DOMAINSERV-236)
+  if [[ -z "$(env_get NTFY_TOPIC "$ENV_FILE")" ]]; then
+    warn "NTFY_TOPIC vacío: el healthcheck corre cada 5 min pero NO puede alertar"
+    warn "  elegí un topic privado, suscribite en la app ntfy y setealo:"
+    warn "  echo 'NTFY_TOPIC=<tu-topic>' >> $ENV_FILE"
+  fi
 else
   warn "no se encontró $INSTALL_DIR/services/systemd/, saltando systemd"
 fi

@@ -73,6 +73,11 @@ services:
     environment:
       # explícito para que el contrato del GC no dependa del cgroup (DOMAINSERV-194)
       GOMEMLIMIT: 1800MiB
+      # DOMAINSERV-236: config.go defaultea a dev y esta var no estaba acá, así que
+      # el VPS corría con env=dev y checkOrphanPolicy (runner.go) aceptaba runs sin
+      # flow_run_id. Defaultea a prod para que un deploy limpio nazca con la barrera
+      # puesta; quien desarrolle local pone dev en su .env
+      DOMAIN_ENV: ${DOMAIN_ENV:-prod}
       DOMAIN_HTTP_PORT: 8000
       DOMAIN_HTTP_BIND: 0.0.0.0
       DOMAIN_DATABASE_URL: postgres://app_user:${APP_USER_PASSWORD}@postgres:5432/${POSTGRES_DB:-domain}?sslmode=disable

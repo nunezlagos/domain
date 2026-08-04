@@ -36,8 +36,14 @@ jobs:
         run: go vet ./...
       - name: go build
         run: go build ./...
+      # -count=1 desactiva el cache de test. Es obligatorio, no una precaución: hay
+      # tests que leen archivos de FUERA del módulo Go (install.sh, .env.example, los
+      # scripts de services/) con paths relativos, y Go no los rastrea para invalidar
+      # el cache. Medido: degradando gen_master_key a 16 bytes, la suite seguía en
+      # verde con cache y solo falló con -count=1. Con `cache: true` en setup-go ese
+      # falso verde también ocurre acá.
       - name: go test unit
-        run: go test -race -timeout=5m ./...
+        run: go test -count=1 -race -timeout=5m ./...
 
   integration-tests:
     name: Integration tests (testcontainers)

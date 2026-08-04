@@ -40,6 +40,42 @@ func TestInstallSh_OpencodePassword_LaGeneraElInstalador(t *testing.T) {
 	}
 }
 
+// DOMAIN_MASTER_KEY cifra el env de mcp_servers y firma los secretos de los webhooks
+// outbound. server_services.go la lee de os.Getenv y, si falta, ni construye el cipher:
+// los webhooks responden 503 permanente (DOMAINSERV-231). Medido 2026-08-04 con docker
+// inspect: no estaba en el env del container ni en el .env del VPS.
+func TestCompose_MasterKey_LlegaAlContainer(t *testing.T) {
+	compose := leerCompose(t)
+
+	if !regexp.MustCompile(`(?m)^\s*DOMAIN_MASTER_KEY:`).MatchString(compose) {
+		t.Error("el compose no declara DOMAIN_MASTER_KEY: el cipher no se construye y los webhooks outbound fallan")
+	}
+}
+
+// crypto.LoadFromBase64 decodifica con base64.StdEncoding y NewCipher exige
+// MasterKeySize=32 bytes, así que el gen_uuid del array CREDS no sirve para esta clave:
+// un UUID no es base64 de 32 bytes. Necesita su propio generador.
+func TestInstallSh_MasterKey_SeGeneraConBase64DeTreintaYDosBytes(t *testing.T) {
+	install := leerArchivoDelRepo(t, "install.sh")
+
+	generador := regexp.MustCompile(`gen_master_key\(\)`)
+	if !generador.MatchString(install) {
+		t.Fatal("install.sh no define gen_master_key: sin generador propio la clave saldría como UUID y LoadFromBase64 la rechaza")
+	}
+
+	cuerpo := regexp.MustCompile(`gen_master_key\(\)\s*\{[^}]*\}`).FindString(install)
+	if !strings.Contains(cuerpo, "head -c 32 /dev/urandom") {
+		t.Errorf("gen_master_key debe leer 32 bytes de /dev/urandom (MasterKeySize=32), cuerpo: %q", cuerpo)
+	}
+	if !strings.Contains(cuerpo, "base64") {
+		t.Errorf("gen_master_key debe codificar en base64 (LoadFromBase64 usa StdEncoding), cuerpo: %q", cuerpo)
+	}
+
+	if !regexp.MustCompile(`DOMAIN_MASTER_KEY.*gen_master_key|gen_master_key.*DOMAIN_MASTER_KEY`).MatchString(install) {
+		t.Error("install.sh define gen_master_key pero no la usa para DOMAIN_MASTER_KEY")
+	}
+}
+
 func leerCompose(t *testing.T) string {
 	t.Helper()
 	crudo := leerArchivoDelRepo(t, filepath.Join("domain-mcp", "docker-compose.yml"))

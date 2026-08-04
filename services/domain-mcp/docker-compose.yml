@@ -120,6 +120,11 @@ services:
       # hay un flag de enabled aparte.
       DOMAIN_CROWDSEC_MACHINE_ID: ${DOMAIN_CROWDSEC_MACHINE_ID:-}
       DOMAIN_CROWDSEC_MACHINE_PASSWORD: ${DOMAIN_CROWDSEC_MACHINE_PASSWORD:-}
+      # DOMAINSERV-231: cifra el env de mcp_servers y firma los secretos de los
+      # webhooks outbound. Faltaba acá, así que server_services.go no construía el
+      # cipher y los webhooks respondían 503 permanente. install.sh la genera como
+      # base64 de 32 bytes, no como UUID: NewCipher rechaza cualquier otro tamaño
+      DOMAIN_MASTER_KEY: ${DOMAIN_MASTER_KEY:-}
       # única fuente de skill_metrics_daily, de donde el portal saca Calls/Success.
       # config.go defaultea a false y esta var no estaba acá, así que el cron nunca
       # corrió en el VPS. El default va en true y no en el .env porque install.sh

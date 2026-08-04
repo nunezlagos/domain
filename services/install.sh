@@ -52,6 +52,20 @@ warn() { log "! $*"; }
 # Formato: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx (RFC 4122 v4)
 # 122 bits de entropía. Posición 13 es siempre '4' (versión).
 # Posición 17 es 8/9/a/b (variant 10xx).
+# DOMAIN_MASTER_KEY no puede ser un UUID: crypto.LoadFromBase64 decodifica con
+# base64.StdEncoding y NewCipher exige exactamente 32 bytes (MasterKeySize).
+gen_master_key() {
+  head -c 32 /dev/urandom | base64 | tr -d '\n'
+}
+
+# el formato del secreto depende de quién lo consume, no del array que lo lista
+gen_cred() {
+  case "$1" in
+    DOMAIN_MASTER_KEY) gen_master_key ;;
+    *) gen_uuid ;;
+  esac
+}
+
 gen_uuid() {
   local hex
   hex=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
@@ -228,13 +242,18 @@ declare -A CREDS=(
   # (DOMAINSERV-62). El compose defaultea a vacío, así que sin esto el par
   # username/password viaja sin secreto por la red interna de Docker
   [OPENCODE_SERVER_PASSWORD]=OPENCODE_SERVER_PASSWORD
+  # cifra el env de mcp_servers y firma los secretos de los webhooks outbound.
+  # No estaba en ningún compose, así que el cipher nunca se construía y los
+  # webhooks inbound respondían 503 permanente (DOMAINSERV-231). Es la única
+  # credencial que NO es un UUID: gen_cred la rutea a gen_master_key
+  [DOMAIN_MASTER_KEY]=DOMAIN_MASTER_KEY
 )
 
 if [[ ! -f "$ENV_FILE" ]]; then
   log ".env no existe — generando credenciales nuevas"
   cp "$ENV_EXAMPLE" "$ENV_FILE"
   for key in "${!CREDS[@]}"; do
-    NEW=$(gen_uuid)
+    NEW=$(gen_cred "$key")
     env_set "$key" "$NEW" "$ENV_FILE"
   done
   ok ".env generado con UUIDs nuevos"
@@ -248,7 +267,7 @@ else
     PLACEHOLDER=$(env_get "$key" "$ENV_EXAMPLE")
     if [[ -z "$EXISTING" ]] || [[ "$EXISTING" == "CHANGE_ME" ]] \
        || { [[ -n "$PLACEHOLDER" ]] && [[ "$EXISTING" == "$PLACEHOLDER" ]]; }; then
-      NEW=$(gen_uuid)
+      NEW=$(gen_cred "$key")
       env_set "$key" "$NEW" "$ENV_FILE"
       log "  $key: regenerada (estaba vacía o con el placeholder del .env.example)"
     else

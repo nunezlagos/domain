@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -19,6 +22,10 @@ type Client struct {
 	S3      *s3.Client
 	Presign *s3.Client
 	Bucket  string
+	// endpointFirmado es la base con la que Presign firma: el publico si esta seteado, el
+	// interno si no. Se guarda porque el SDK no lo expone y el guard de DOMAINSERV-214 lo
+	// necesita para decidir si la URL es alcanzable por un cliente externo.
+	endpointFirmado string
 }
 
 // Config for S3 client.
@@ -50,15 +57,55 @@ func New(cfg Config) (*Client, error) {
 
 	internal := s3.NewFromConfig(awsCfg, endpointOpts(cfg.Endpoint))
 	presign := internal
+	firmado := cfg.Endpoint
 	if cfg.PublicEndpoint != "" {
 		presign = s3.NewFromConfig(awsCfg, endpointOpts(cfg.PublicEndpoint))
+		firmado = cfg.PublicEndpoint
 	}
 
 	return &Client{
-		S3:      internal,
-		Presign: presign,
-		Bucket:  cfg.Bucket,
+		S3:              internal,
+		Presign:         presign,
+		Bucket:          cfg.Bucket,
+		endpointFirmado: firmado,
 	}, nil
+}
+
+// esHostDeRedInterna reconoce un host que solo resuelve dentro de la red de Docker, o sea
+// un nombre de servicio del compose.
+//
+// El criterio NO puede ser "PublicEndpoint esta vacio": en desarrollo el vacio es legitimo,
+// porque ahi el endpoint interno ya es alcanzable por el cliente (localhost).
+func esHostDeRedInterna(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if host == "" || host == "localhost" || net.ParseIP(host) != nil {
+		return false
+	}
+	// un FQDN publico lleva al menos un punto; un nombre de servicio del compose, no
+	return !strings.Contains(host, ".")
+}
+
+// validarEndpointFirmado corta la emision de URLs que el cliente no puede resolver.
+//
+// El defecto medido en prod (DOMAINSERV-214) no era una URL mal formada: salia perfecta,
+// firmada y con expiracion valida, apuntando a minio:9000. El cliente descubria el problema
+// recien al hacer el PUT, lejos de la causa. La policy default-de-env-var-va-en-el-compose
+// exige que la ausencia de un valor propio del ambiente falle ruidosamente y no degrade.
+//
+// Solo aplica a las URLs que se entregan al CLIENTE: el server sigue operando por el
+// endpoint interno.
+func (c *Client) validarEndpointFirmado() error {
+	if !esHostDeRedInterna(c.endpointFirmado) {
+		return nil
+	}
+	return fmt.Errorf(
+		"el endpoint que se firma para el cliente (%q) solo resuelve dentro de la red de Docker: "+
+			"setear DOMAIN_S3_PUBLIC_ENDPOINT con una URL alcanzable desde afuera, y exponer el "+
+			"storage para que lo sea (DOMAINSERV-214)", c.endpointFirmado)
 }
 
 func endpointOpts(endpoint string) func(*s3.Options) {
@@ -74,6 +121,9 @@ func endpointOpts(endpoint string) func(*s3.Options) {
 
 // GenerateUploadURL creates a presigned PUT URL valid for 15 minutes.
 func (c *Client) GenerateUploadURL(ctx context.Context, key string) (string, error) {
+	if err := c.validarEndpointFirmado(); err != nil {
+		return "", err
+	}
 	ps := s3.NewPresignClient(c.Presign)
 	req, err := ps.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(c.Bucket),
@@ -87,6 +137,9 @@ func (c *Client) GenerateUploadURL(ctx context.Context, key string) (string, err
 
 // GenerateDownloadURL creates a presigned GET URL valid for 1 hour.
 func (c *Client) GenerateDownloadURL(ctx context.Context, key string) (string, error) {
+	if err := c.validarEndpointFirmado(); err != nil {
+		return "", err
+	}
 	ps := s3.NewPresignClient(c.Presign)
 	req, err := ps.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(c.Bucket),

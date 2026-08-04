@@ -215,15 +215,23 @@ func TestClient_GenerateDownloadURL_ConPublicEndpoint_FirmaContraElPublico(t *te
 	require.Equal(t, "storage.example.com", u.Host)
 }
 
+// CAMBIO DE CONTRATO (DOMAINSERV-214): la version previa de este test usaba
+// Endpoint "http://minio:9000" y aseveraba que la URL saliera con ese host, con el mensaje
+// "sin endpoint publico se preserva el comportamiento previo". Ese comportamiento previo ERA
+// el defecto: fijaba como contrato la emision de una URL que ningun cliente resuelve.
+//
+// La propiedad legitima que el test cubria —sin PublicEndpoint se firma con el interno— se
+// preserva, ahora con un endpoint interno que SI es alcanzable. El caso del host de red
+// interna lo cubre TestClient_GenerateUploadURL_EndpointDeRedInterna_FallaRuidosamente.
 func TestClient_GenerateUploadURL_SinPublicEndpoint_CaeAlInterno(t *testing.T) {
-	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "test", Key: "k", Secret: "s"})
+	c := newTestClient(t, Config{Endpoint: "http://localhost:9000", Bucket: "test", Key: "k", Secret: "s"})
 
 	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
 	require.NoError(t, err)
 
 	u, err := url.Parse(raw)
 	require.NoError(t, err)
-	require.Equal(t, "minio:9000", u.Host, "sin endpoint publico se preserva el comportamiento previo")
+	require.Equal(t, "localhost:9000", u.Host, "sin endpoint publico se firma con el interno")
 }
 
 func TestClient_ConfirmObject_ConPublicEndpoint_UsaElInterno(t *testing.T) {
@@ -245,14 +253,16 @@ func TestClient_ConfirmObject_ConPublicEndpoint_UsaElInterno(t *testing.T) {
 // DOMAINSERV-216: path-style es requisito de MinIO y esta hardcodeado. Nada lo
 // probaba, asi que el dia que alguien lo haga configurable nada va a avisar.
 func TestClient_GenerateUploadURL_PoneElBucketEnElPath_NoEnElHost(t *testing.T) {
-	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "domain-attachments", Key: "k", Secret: "s"})
+	// el endpoint pasa de minio:9000 a localhost:9000 por el fail-closed de DOMAINSERV-214:
+	// la propiedad que este test cubre es el path-style, que no depende del hostname
+	c := newTestClient(t, Config{Endpoint: "http://localhost:9000", Bucket: "domain-attachments", Key: "k", Secret: "s"})
 
 	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
 	require.NoError(t, err)
 
 	u, err := url.Parse(raw)
 	require.NoError(t, err)
-	require.Equal(t, "minio:9000", u.Host, "virtual-host style rompe MinIO: el bucket no puede ir en el host")
+	require.Equal(t, "localhost:9000", u.Host, "virtual-host style rompe MinIO: el bucket no puede ir en el host")
 	require.Equal(t, "/domain-attachments/test/key", u.Path)
 }
 
@@ -280,4 +290,74 @@ func TestClient_StructShape(t *testing.T) {
 	require.Equal(t, "b", c.Bucket)
 	var _ *s3.Client = c.S3
 	var _ *s3.Client = c.Presign
+}
+
+// DOMAINSERV-214: el defecto medido en prod no era que la URL saliera mal formada — salia
+// PERFECTA, con firma valida y X-Amz-Expires=900, apuntando a un host que ningun cliente
+// externo resuelve. El error aparecia recien en el PUT del cliente, lejos de la causa.
+//
+// La decision del usuario fue dejar attachments DORMIDO en vez de exponer MinIO, asi que
+// el entregable es que la feature CONFIESE que esta apagada. Lo exige la policy
+// default-de-env-var-va-en-el-compose: "Valores propios del ambiente (IPs, dominios,
+// rutas): no tienen default sensato; su ausencia debe fallar ruidosamente, no degradar".
+func TestClient_GenerateUploadURL_EndpointDeRedInterna_FallaRuidosamente(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+
+	require.Error(t, err, "una URL que el cliente no puede resolver no se emite")
+	require.Empty(t, raw, "no devolver una URL a medias junto al error")
+	require.Contains(t, err.Error(), "DOMAIN_S3_PUBLIC_ENDPOINT",
+		"el error tiene que nombrar la variable que lo destraba, no solo que algo falta")
+}
+
+func TestClient_GenerateDownloadURL_EndpointDeRedInterna_FallaRuidosamente(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	raw, err := c.GenerateDownloadURL(context.Background(), "test/key")
+
+	require.Error(t, err)
+	require.Empty(t, raw)
+}
+
+// El criterio NO puede ser "PublicEndpoint vacio": en dev el vacio es legitimo porque el
+// endpoint interno ya es alcanzable. Estos tres casos son la contra-prueba de que el guard
+// discrimina por HOST y no por la ausencia de la variable — sin ellos, un guard que
+// rechazara todo vacio pasaria igual y romperia el desarrollo local.
+func TestClient_GenerateUploadURL_EndpointAlcanzableSinPublico_NoFalla(t *testing.T) {
+	casos := map[string]string{
+		"localhost":       "http://localhost:9000",
+		"IP literal":      "http://127.0.0.1:9000",
+		"FQDN con puntos": "https://s3.example.com",
+	}
+
+	for nombre, endpoint := range casos {
+		t.Run(nombre, func(t *testing.T) {
+			c := newTestClient(t, Config{Endpoint: endpoint, Bucket: "test", Key: "k", Secret: "s"})
+
+			raw, err := c.GenerateUploadURL(context.Background(), "test/key")
+
+			require.NoError(t, err, "este endpoint SI lo resuelve un cliente: no hay nada que bloquear")
+			require.NotEmpty(t, raw)
+		})
+	}
+}
+
+// El server sigue hablando con MinIO por el endpoint interno: el guard es solo para las URLs
+// que se le entregan al cliente. Si esto se rompe, el fail-closed dejo de ser quirurgico y
+// apaga tambien el camino del server.
+//
+// La asercion es sobre el TIPO de error y no sobre su ausencia, a proposito: con un host que
+// no resuelve, ConfirmObject tiene que fallar por RED. Un require.NoError seria imposible de
+// satisfacer, y usar el stub (que escucha en 127.0.0.1, o sea una IP) haria que el test
+// pasara sin ejercer nunca la rama del host interno — prometeria en su nombre algo que no
+// prueba.
+func TestClient_ConfirmObject_EndpointDeRedInterna_FallaPorRedYNoPorElGuard(t *testing.T) {
+	c := newTestClient(t, Config{Endpoint: "http://minio:9000", Bucket: "test", Key: "k", Secret: "s"})
+
+	_, _, err := c.ConfirmObject(context.Background(), "test/key")
+
+	require.Error(t, err, "el host no resuelve: tiene que fallar por red")
+	require.NotContains(t, err.Error(), "DOMAIN_S3_PUBLIC_ENDPOINT",
+		"el guard del cliente no debe alcanzar al camino del server")
 }

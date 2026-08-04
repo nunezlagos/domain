@@ -21,6 +21,10 @@ func checkAgentCatalog(paths Paths, cat []agentTemplate) int {
 	var faltantes, desactualizados, editados []string
 
 	for _, a := range cat {
+		ausentes, divergentes := revisarGuards(paths, a)
+		faltantes = append(faltantes, ausentes...)
+		desactualizados = append(desactualizados, divergentes...)
+
 		destino := filepath.Join(paths.GlobalAgentsDir, a.slug+".md")
 		hashActual, err := fileSHA256(destino)
 		if err != nil {
@@ -38,6 +42,35 @@ func checkAgentCatalog(paths Paths, cat []agentTemplate) int {
 	}
 
 	return reportarCatalogo(len(cat), faltantes, desactualizados, editados)
+}
+
+// revisarGuards compara por hash los scripts PreToolUse que el agente declara contra los
+// bytes del bundle. Se compara el contenido CRUDO y no la plantilla resuelta: a diferencia
+// del .md, resolverGuards escribe el guard tal cual (agent_guards.go:78), sin reescribir rutas.
+//
+// Sin esto el doctor daba verde sobre el caso que originó DOMAINSERV-232: git-archaeology-guard.sh
+// se arregló en el repo y el instalado siguió con el agujero de --output. Un guard divergente
+// es peor que uno ausente — el agente cree estar acotado y no lo está.
+func revisarGuards(paths Paths, a agentTemplate) (ausentes, divergentes []string) {
+	if paths.AgentHooksDir == "" {
+		return nil, nil
+	}
+	for _, nombre := range guardsDeclarados(a.claude) {
+		esperado, hay := a.guards[nombre]
+		if !hay || len(esperado) == 0 {
+			continue
+		}
+		etiqueta := a.slug + "/" + nombre
+		hashActual, err := fileSHA256(filepath.Join(paths.AgentHooksDir, nombre))
+		if err != nil {
+			ausentes = append(ausentes, etiqueta)
+			continue
+		}
+		if hashActual != sha256Hex(esperado) {
+			divergentes = append(divergentes, etiqueta)
+		}
+	}
+	return ausentes, divergentes
 }
 
 func reportarCatalogo(total int, faltantes, desactualizados, editados []string) int {

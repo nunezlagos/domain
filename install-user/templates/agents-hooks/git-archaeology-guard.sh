@@ -61,6 +61,16 @@ if re.search(r"\bgit\s+(?:-[cC]\b|--git-dir\b|--work-tree\b)", cmd):
     print("deny:opciones globales de git (-C/-c/--git-dir/--work-tree) no permitidas")
     sys.exit(0)
 
+# --output es de la familia diff, la comparten log y show, y ESCRIBE el archivo sin
+# pasar por el operador de redirección: la rama de [<>] de arriba no lo ve y el
+# allowlist de abajo lo acepta por empezar con "git log". Era una primitiva de
+# escritura arbitraria en el agente de menor riesgo del catálogo. El límite exige
+# "=", espacio o fin para no pisar --output-indicator-*, que solo cambia el marcador
+# del diff y no escribe nada.
+if re.search(r"(?:^|\s)--output(?:=|\s|$)", cmd):
+    print("deny:--output escribe un archivo — este agente no muta el filesystem")
+    sys.exit(0)
+
 if re.match(r"^\s*git\s+(log|show|blame)\b", cmd):
     print("allow:")
 else:

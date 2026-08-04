@@ -48,6 +48,32 @@ jobs:
             bash -n "$f" && echo "ok  $f"
           done
 
+      # bash -n solo prueba que el script PARSEE. Las suites de abajo verifican qué
+      # DECIDE cada hook, y hasta ahora ninguna corría en ningún pipeline: el hueco de
+      # --output en git-archaeology-guard vivió sin que nadie lo viera precisamente por
+      # eso. Fallar el job si una suite falla, y también si no se encontró ninguna:
+      # un glob que no matchea dejaría el step verde sin haber probado nada.
+      - name: Suites de los hooks y guards shell
+        run: |
+          fails=0
+          found=0
+          for f in hooks/*_test.sh templates/agents-hooks/*_test.sh; do
+            [ -e "$f" ] || continue
+            found=$((found + 1))
+            if bash "$f"; then
+              echo "PASS  $f"
+            else
+              echo "FAIL  $f"
+              fails=$((fails + 1))
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "ninguna suite encontrada: el glob no matcheó y este step no probó nada"
+            exit 1
+          fi
+          echo "$found suite(s), $fails fallo(s)"
+          [ "$fails" -eq 0 ]
+
   size-lint:
     name: size-lint
     runs-on: ubuntu-latest

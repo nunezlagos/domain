@@ -66,7 +66,15 @@ is_test = bool(test_re.search(cmd)) and not ayuda_re.search(cmd)
 # Se decide sobre el COMANDO y no sobre el output: el shape del tool_response ya
 # rompió este hook dos veces (DOMAINSERV-108), y el comando es dato de entrada.
 def base_de(texto, cwd):
-    """Directorio donde corre el comando: el cwd de la sesión más los `cd`."""
+    """Directorio donde corre el comando: el cwd del payload más los `cd`.
+
+    El `cd` solo se aplica si el path resultante EXISTE. El cwd del payload es el
+    del shell persistente, que puede venir ya posicionado en el destino: ahí
+    componer `cwd + cd` da un path doblado (…/services/domain-mcp/services/
+    domain-mcp) que no existe, el alcance queda apuntando a la nada y el gate
+    deniega un commit legítimo. Pasó de verdad, y un gate que deniega lo legítimo
+    empuja al bypass — el modo de falla de DOMAINSERV-111/175/195.
+    """
     b = cwd or os.getcwd()
     for seg in re.split(r"&&|;|\n", texto):
         m = re.match(r"\s*cd\s+([^\s;|&]+)", seg)
@@ -76,8 +84,29 @@ def base_de(texto, cwd):
         # de bash entre comillas simples, y una comilla simple acá lo cierra antes
         # de tiempo — ni siquiera dentro de un comentario
         dst = m.group(1).strip(chr(39) + chr(34))
-        b = dst if dst.startswith("/") else os.path.normpath(os.path.join(b, dst))
+        cand = dst if dst.startswith("/") else os.path.normpath(os.path.join(b, dst))
+        if os.path.isdir(cand):
+            b = cand
     return b
+
+
+def raiz_de_modulo(d):
+    """El directorio con go.mod que gobierna d, o "" si no hay ninguno.
+
+    Ancla el alcance a un MÓDULO real en vez del cwd del shell. Sin esto, un cwd que
+    resuelve a la raíz del monorepo (donde NO hay go.mod) registraba la raíz entera
+    como alcance, y a partir de ahí el chequeo de cobertura quedaba vacuo: cualquier
+    archivo del repo caía "dentro". Medido — el alcance acumulado llegó a tener la
+    raíz y con eso el guard dejaba pasar todo.
+    """
+    d = os.path.abspath(d)
+    while True:
+        if os.path.isfile(os.path.join(d, "go.mod")):
+            return d
+        padre = os.path.dirname(d)
+        if padre == d:
+            return ""
+        d = padre
 
 
 def alcance_go(texto, base):
@@ -92,8 +121,13 @@ def alcance_go(texto, base):
             continue
         for tok in seg.split():
             m = re.match(r"^(?:\./)?(.*?)/?\.\.\.$", tok)
-            if m:
-                dirs.append(os.path.normpath(os.path.join(base, m.group(1) or ".")))
+            if not m:
+                continue
+            objetivo = os.path.normpath(os.path.join(base, m.group(1) or "."))
+            # sin go.mod que lo gobierne no hubo corrida de Go que valga: registrar
+            # ese path como alcance es afirmar una cobertura que nadie ejecutó
+            if raiz_de_modulo(objetivo):
+                dirs.append(objetivo)
     return dirs
 
 

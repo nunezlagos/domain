@@ -35,6 +35,12 @@ func repoGitDePrueba(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	archivos := map[string]string{
+		// DOMAINSERV-237: el go.mod NO es decorativo. El alcance del marker se ancla al
+		// módulo que gobierna el path, porque un path sin go.mod no pudo ser recorrido
+		// por ninguna corrida de Go y registrarlo afirmaría una cobertura inexistente.
+		// Sin este archivo el fixture no representa un módulo y los casos de alcance
+		// medirían otra cosa.
+		"go.mod":                         "module fixture\n\ngo 1.22\n",
 		"main.go":                        "package main\n\nfunc main() {}\n",
 		"CHANGELOG.md":                   "# Changelog\n",
 		"services/install.sh":            "#!/usr/bin/env bash\necho hola\n",

@@ -178,7 +178,8 @@ func toolTicketCreate() mcp.Tool {
 		mcp.WithDescription("Crea un ticket interno en un proyecto. Auto-genera key (PROJ-1, PROJ-2 derivado del project slug). issue_type: bug|feature|requirement|task|epic|improvement|spike. priority: trivial|low|medium|high|critical. status arranca en 'backlog'. Para vincular con Jira/etc usa domain_ticket_link_external despues."),
 		mcp.WithString("project_slug", mcp.Description("Proyecto al que pertenece el ticket"), mcp.Required()),
 		mcp.WithString("title", mcp.Description("Titulo corto"), mcp.Required()),
-		mcp.WithString("description_md", mcp.Description("Descripcion markdown")),
+		mcp.WithString("description_md", mcp.Description("Descripcion markdown. SEPARA lo MEDIDO de lo INFERIDO en dos secciones, y no las mezcles en el mismo tono (DOMAINSERV-220): '## Medido' lleva el comando que corriste o el path:linea que leiste, para que otro lo verifique sin repetir tu razonamiento; '## Hipotesis' lleva las inferencias razonables sin medicion, para que quien retome sepa que re-verificar y que no. Medido el 2026-07-31: de 4 tickets abordados, 3 tenian una afirmacion factual falsa presentada con el mismo tono que las mediciones, y una de ellas cambio la CLASE de esfuerzo estimada (un fix de 25 lineas quedo rotulado 'cambio de contrato' y se estaciono en backlog).")),
+		mcp.WithString("verificado_contra_head", mcp.Description("SHA del HEAD del repo contra el que verificaste las afirmaciones factuales del ticket (DOMAINSERV-220). Se persiste como label 'head-<sha7>', asi que un ticket cuyo label apunta a un HEAD viejo es sospechoso por construccion, sin necesidad de leerlo. El repo se mueve: una descripcion de hace tres dias puede describir un schema que ya no existe.")),
 		mcp.WithString("issue_type", mcp.Description("bug|feature|requirement|task|epic|improvement|spike. Default: task")),
 		mcp.WithString("priority", mcp.Description("trivial|low|medium|high|critical. Default: medium")),
 		mcp.WithString("client_slug", mcp.Description("Si el ticket pertenece a un cliente/mandante especifico del proyecto")),
@@ -308,6 +309,17 @@ func parseDateYMD(s string) *time.Time {
 	return &t
 }
 
+// headCorto normaliza el SHA a 7 caracteres, que es lo que se lee en un label sin ocupar la
+// línea entera. Un valor más corto se deja como vino: truncar a ciegas produciría un label que
+// parece un SHA y no lo es, y eso es peor que uno raro pero honesto.
+func headCorto(sha string) string {
+	sha = strings.TrimSpace(sha)
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
 func (h *ticketHandlers) handleTicketCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if err := h.requireDeps(); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -352,6 +364,13 @@ func (h *ticketHandlers) handleTicketCreate(ctx context.Context, req mcp.CallToo
 		if aid, err := uuid.Parse(v); err == nil {
 			in.AssigneeID = &aid
 		}
+	}
+	// DOMAINSERV-220: el HEAD verificado viaja como label y no como columna nueva, porque
+	// labels ya es consultable con domain_ticket_list(label=...) y una migración de schema
+	// para un dato de procedencia no se paga. Lo arma el server y no quien llama: el formato
+	// tiene que ser uno solo para que el filtro sirva.
+	if v, ok := args["verificado_contra_head"].(string); ok && v != "" {
+		in.Labels = append(in.Labels, "head-"+headCorto(v))
 	}
 	if v, ok := args["labels"].([]any); ok {
 		for _, l := range v {

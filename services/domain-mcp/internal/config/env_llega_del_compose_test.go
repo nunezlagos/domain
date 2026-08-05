@@ -76,6 +76,94 @@ func TestInstallSh_MasterKey_SeGeneraConBase64DeTreintaYDosBytes(t *testing.T) {
 	}
 }
 
+// DOMAINSERV-243: la paridad entre los dos .env.example es lo que arregla la CLASE,
+// no el caso. Son dos caminos distintos y los dos son reales: services/.env.example
+// lo consume install.sh en el deploy, y services/domain-mcp/.env.example es el de
+// `go run ./cmd/domain server` en local. DOMAIN_MASTER_KEY se documentó en el
+// primero y se olvidó en el segundo, así que un dev que levanta local reproduce el
+// 503 de DOMAINSERV-231 sin una línea que se lo explique.
+//
+// El invariante NO es "los 13 secretos de CREDS en los dos archivos": varios son de
+// infra (Grafana, CrowdSec, el backup, MinIO) o de otro servicio (Django, el panel)
+// y no tienen nada que hacer en el example del server. El invariante correcto se
+// deriva del compose: si el service domain-mcp DECLARA un secreto, entonces el
+// server lo consume, y su example dev-local tiene que documentarlo.
+func TestEnvExample_ParidadDeSecretosQueElServerConsume(t *testing.T) {
+	credsDeInstalador := clavesDeCREDS(t)
+	if len(credsDeInstalador) == 0 {
+		t.Fatal("no se pudo parsear el array CREDS de install.sh: sin eso este guard no mide nada")
+	}
+	bloqueDelServer := leerCompose(t)
+	exampleDev := leerArchivoDelRepo(t, filepath.Join("domain-mcp", ".env.example"))
+
+	var faltan []string
+	for _, clave := range credsDeInstalador {
+		enElCompose := regexp.MustCompile(`(?m)^\s*` + clave + `:`).MatchString(bloqueDelServer)
+		if !enElCompose {
+			continue
+		}
+		declarada := regexp.MustCompile(`(?m)^` + clave + `=`).MatchString(exampleDev)
+		if !declarada {
+			faltan = append(faltan, clave)
+		}
+	}
+	if len(faltan) > 0 {
+		t.Errorf("el service domain-mcp declara estos secretos en su compose pero su .env.example dev-local no los documenta: %s\n"+
+			"un dev que levanta local con ese archivo arranca sin ellos y reproduce el fallo en silencio",
+			strings.Join(faltan, ", "))
+	}
+}
+
+// El acotamiento de leerCompose necesita su propio test: el de paridad NO lo mide.
+// Se comprobó por sabotaje — al devolver hasta EOF de nuevo, el de paridad siguió en
+// verde, porque OPENCODE_SERVER_PASSWORD está declarada en los DOS services y da
+// igual dónde se la busque. Sin este caso, el acotamiento sería un cambio sin guard:
+// alguien lo revierte, los asserts de este archivo vuelven a mirar el compose entero
+// y una variable declarada bajo `opencode` pasa como si estuviera en el server.
+func TestLeerCompose_DevuelveSoloElBloqueDelServiceDomainMcp(t *testing.T) {
+	bloque := leerCompose(t)
+
+	if strings.Contains(bloque, "  opencode:") {
+		t.Error("leerCompose incluye el service opencode: un assert sobre este texto no puede afirmar nada del server")
+	}
+	if regexp.MustCompile(`(?m)^networks:`).MatchString(bloque) {
+		t.Error("leerCompose llega hasta el final del archivo en vez de cortar en el próximo service")
+	}
+	// contra-prueba: si acotara DE MÁS, el bloque quedaría vacío y todos los asserts
+	// de este archivo pasarían por vacuidad
+	if !regexp.MustCompile(`(?m)^\s*DOMAIN_MASTER_KEY:`).MatchString(bloque) {
+		t.Error("el bloque quedó sin el env del propio service: acotó de más y los asserts pasarían por vacuidad")
+	}
+}
+
+// clavesDeCREDS extrae los nombres del array asociativo de install.sh. Se parsea el
+// instalador en vez de mantener una lista acá: una lista paralela se desincroniza y
+// el guard pasaría a proteger un conjunto que ya no es el real.
+func clavesDeCREDS(t *testing.T) []string {
+	t.Helper()
+	install := leerArchivoDelRepo(t, "install.sh")
+	inicio := strings.Index(install, "declare -A CREDS=(")
+	if inicio == -1 {
+		t.Fatal("install.sh no declara el array CREDS")
+	}
+	fin := strings.Index(install[inicio:], "\n)")
+	if fin == -1 {
+		t.Fatal("no se encontró el cierre del array CREDS")
+	}
+	var claves []string
+	for _, m := range regexp.MustCompile(`\[([A-Z_]+)\]=`).FindAllStringSubmatch(install[inicio:inicio+fin], -1) {
+		claves = append(claves, m[1])
+	}
+	return claves
+}
+
+// leerCompose devuelve SOLO el bloque del service domain-mcp.
+//
+// Antes devolvía desde "  domain-mcp:" hasta EOF, y eso hacía que una variable
+// declarada bajo `opencode:` (donde el cipher del server no existe) pasara los
+// asserts de este archivo como si estuviera en el service correcto. Acotarlo al
+// siguiente key de nivel 2 es lo que hace que los guards midan el service que dicen
+// medir (DOMAINSERV-243, misma familia que el 231 que los escribió).
 func leerCompose(t *testing.T) string {
 	t.Helper()
 	crudo := leerArchivoDelRepo(t, filepath.Join("domain-mcp", "docker-compose.yml"))
@@ -83,7 +171,11 @@ func leerCompose(t *testing.T) string {
 	if inicio == -1 {
 		t.Fatal("el compose no tiene un service domain-mcp")
 	}
-	return crudo[inicio:]
+	bloque := crudo[inicio+len("  domain-mcp:"):]
+	if fin := regexp.MustCompile(`(?m)^  [a-zA-Z_-]+:`).FindStringIndex(bloque); fin != nil {
+		bloque = bloque[:fin[0]]
+	}
+	return bloque
 }
 
 func leerArchivoDelRepo(t *testing.T, relativo string) string {

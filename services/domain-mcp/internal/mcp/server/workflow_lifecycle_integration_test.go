@@ -216,16 +216,29 @@ func TestUpsertWorkflow_CorridaYaTerminal_NoRevivePorMasQueLlegueActividad(t *te
 // despachar la query, y MarkWorkflowIdle hace ended_at = last_activity_at. Para un
 // workflow de un solo touch, started_at salía SIEMPRE posterior a ended_at, y
 // siempre con el mismo signo (−25 ms, −3 ms): orden de ejecución, no skew.
-func TestUpsertWorkflow_UnSoloTouch_LaDuracionNoEsNegativa(t *testing.T) {
+func TestUpsertWorkflow_UnSoloTouch_ElStartedAtSaleDelRelojDelCaller(t *testing.T) {
 	store, cleanup := storeParaLifecycle(t)
 	defer cleanup()
 	ctx := context.Background()
 
+	// Una hora atrás, y NO time.Now(), porque es lo que hace visible el defecto: con
+	// el now() de Postgres el started_at sale una hora en el futuro respecto de la
+	// actividad que lo generó. La primera versión de este test usaba time.Now() y
+	// pasaba en VERDE con el bug intacto — los dos relojes difieren en milisegundos y
+	// ninguna aserción los distingue. Peor: el GREATEST que MarkWorkflowIdle usa como
+	// defensa en profundidad enmascara la duración negativa, así que la aserción sobre
+	// ended_at tampoco podía detectarlo. Hay que medir el started_at directamente.
+	actividad := time.Now().UTC().Add(-time.Hour)
 	id := uuid.New()
 	require.NoError(t, store.UpsertWorkflow(ctx, observability.WorkflowRow{
 		ID: id, Status: observability.WorkflowRunning, TotalToolCalls: 1,
-		LastActivityAt: time.Now().UTC(),
+		LastActivityAt: actividad,
 	}))
+
+	abierto, err := store.GetWorkflow(ctx, id)
+	require.NoError(t, err)
+	require.WithinDuration(t, actividad, abierto.StartedAt, time.Second,
+		"started_at tiene que venir del mismo reloj que last_activity_at, no del now() de Postgres")
 
 	n, err := store.MarkWorkflowIdle(ctx, 0)
 	require.NoError(t, err)

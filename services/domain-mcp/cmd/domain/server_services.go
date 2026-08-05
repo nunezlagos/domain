@@ -41,7 +41,6 @@ import (
 	agentrunner "nunezlagos/domain/internal/runner/agent"
 	flowrunner "nunezlagos/domain/internal/runner/flow"
 	skillrunner "nunezlagos/domain/internal/runner/skill"
-	"nunezlagos/domain/internal/secrets"
 	agentsvc "nunezlagos/domain/internal/service/agent"
 	attSvc "nunezlagos/domain/internal/service/attachment"
 	"nunezlagos/domain/internal/service/billing"
@@ -56,7 +55,6 @@ import (
 	"nunezlagos/domain/internal/service/issuebuilder"
 	"nunezlagos/domain/internal/service/knowledge"
 	"nunezlagos/domain/internal/service/lifecycle"
-	"nunezlagos/domain/internal/service/mcpserver"
 	"nunezlagos/domain/internal/service/observation"
 	"nunezlagos/domain/internal/service/orchestrator"
 	analysissvc "nunezlagos/domain/internal/service/orchestrator/analysis"
@@ -125,7 +123,6 @@ type serverServices struct {
 	SkillExecService       *skillsvc.ExecutionService
 	ModelRegistry          *llmregistry.Registry
 	UsageAlertsService     *usagealerts.Service
-	MCPServerService       *mcpserver.Service
 	ProjectTemplateService *projecttemplate.Service
 	PolicyService          *policy.Service
 	IssuebuilderSvc        *issuebuilder.Service
@@ -143,7 +140,6 @@ type serverServices struct {
 	CronService            *cronsvc.Service
 	APIKeyStore            *apikey.PGStore
 	ActivityStore          *activity.PGStore
-	SecretsStore           *secrets.PGStore
 	RateLimiter            *ratelimit.Limiter
 	RequirementService     *reqsvc.Service
 	HUService              *usvc.Service
@@ -312,7 +308,6 @@ func buildServices(
 		s.UsageAlertsService = &usagealerts.Service{Pool: pools.App, Logger: logger}
 	}
 
-	s.MCPServerService = &mcpserver.Service{Pool: pools.App, Cipher: s.MasterCipher, Logger: logger}
 	s.ProjectTemplateService = &projecttemplate.Service{Pool: pools.App}
 	s.PolicyService = &policy.Service{Pool: pools.App}
 	s.IssuebuilderSvc = &issuebuilder.Service{Pool: pools.App, Audit: s.Recorder, DraftTTLHrs: 24}
@@ -414,7 +409,6 @@ func buildServices(
 	}
 
 	s.ActivityStore = &activity.PGStore{Pool: pools.App}
-	s.SecretsStore = &secrets.PGStore{Pool: pools.App, Cipher: s.MasterCipher}
 
 	windowDur, _ := time.ParseDuration(cfg.RateLimitWindow)
 	refillRate := float64(cfg.RateLimitRequests) / windowDur.Seconds()

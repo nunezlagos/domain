@@ -196,31 +196,19 @@ func scanWorkflowRow(rows interface {
 	Scan(dest ...any) error
 }) (observability.WorkflowRow, error) {
 	var (
-		w       observability.WorkflowRow
-		status  string
-		name    *string
-		actor   *uuid.UUID
-		apiKey  *uuid.UUID
-		project *uuid.UUID
+		w      observability.WorkflowRow
+		status string
+		name   *string
 	)
 	err := rows.Scan(&w.ID, &name, &status, &w.StartedAt, &w.EndedAt,
 		&w.TotalToolCalls, &w.TotalErrors, &w.TotalDurationMS,
-		&actor, &apiKey, &project, &w.LastActivityAt)
+		&w.ActorID, &w.APIKeyID, &w.ProjectID, &w.LastActivityAt)
 	if err != nil {
 		return observability.WorkflowRow{}, err
 	}
 	w.Status = observability.WorkflowStatus(status)
 	if name != nil {
 		w.Name = *name
-	}
-	if actor != nil {
-		w.ActorID = *actor
-	}
-	if apiKey != nil {
-		w.APIKeyID = *apiKey
-	}
-	if project != nil {
-		w.ProjectID = *project
 	}
 	return w, nil
 }

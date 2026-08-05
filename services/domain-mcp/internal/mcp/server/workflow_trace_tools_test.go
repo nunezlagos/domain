@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -91,7 +92,12 @@ func TestParseSinceOrDefault(t *testing.T) {
 	require.Equal(t, 2026, got.Year())
 }
 
-func TestWorkflowRowToMap_OmitsNilValues(t *testing.T) {
+// DOMAINSERV-229: este test se llamaba OmitsNilValues y no asertaba UN SOLO valor
+// nil — pasaba con el bug intacto. El defecto real está en el JSON: con los campos
+// declarados como uuid.UUID no-puntero, un NULL de la BD quedaba en el zero-value y
+// uuid.UUID.MarshalJSON emitía "00000000-0000-0000-0000-000000000000", que nadie
+// puede distinguir de un actor real. Con *uuid.UUID el JSON emite null.
+func TestWorkflowRowToMap_LosNullDeLaBDSalenComoNull(t *testing.T) {
 	w := observability.WorkflowRow{
 		ID:     uuid.New(),
 		Status: observability.WorkflowRunning,
@@ -99,4 +105,33 @@ func TestWorkflowRowToMap_OmitsNilValues(t *testing.T) {
 	m := workflowRowToMap(w)
 	require.NotEmpty(t, m["id"])
 	require.Equal(t, "running", m["status"])
+
+	require.Nil(t, m["actor_id"], "un workflow sin actor no tiene el uuid cero: no tiene actor")
+	require.Nil(t, m["api_key_id"])
+	require.Nil(t, m["project_id"])
+
+	// Lo que ve el cliente MCP, que es donde el centinela era visible.
+	raw, err := json.Marshal(m)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `"actor_id":null`)
+	require.NotContains(t, string(raw), "00000000-0000-0000-0000-000000000000",
+		"el centinela no puede aparecer en la respuesta del tool")
+}
+
+func TestWorkflowRowToMap_ConValoresRealesLosPreserva(t *testing.T) {
+	actor, apiKey, project := uuid.New(), uuid.New(), uuid.New()
+	w := observability.WorkflowRow{
+		ID:        uuid.New(),
+		Status:    observability.WorkflowCompleted,
+		ActorID:   &actor,
+		APIKeyID:  &apiKey,
+		ProjectID: &project,
+	}
+	m := workflowRowToMap(w)
+
+	raw, err := json.Marshal(m)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), actor.String())
+	require.Contains(t, string(raw), apiKey.String())
+	require.Contains(t, string(raw), project.String())
 }

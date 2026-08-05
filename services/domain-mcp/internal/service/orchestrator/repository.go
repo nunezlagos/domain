@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"nunezlagos/domain/internal/observability"
 	"nunezlagos/domain/internal/service/orchestrator/modes"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
 )
@@ -207,13 +209,33 @@ type FlowRunStepInsert struct {
 // pgRepository implementa Repository contra Postgres. Usa pgx directamente
 // porque las queries son específicas del orquestador (no las saca el flow
 // service general).
+// workflowCloser cierra el workflow correlacionado con una corrida. La interfaz
+// se declara acá, en el consumidor, y no en el paquete que la implementa
+// (policy coupling-consumer-defined-interfaces): al orquestador solo le interesa
+// "cerrá el workflow de esta corrida", no el row completo de observabilidad.
+//
+// El workflow_id ES el flow_run_id (DOMAINSERV-212), así que no hacen falta los dos.
+type workflowCloser interface {
+	CloseWorkflow(ctx context.Context, flowRunID uuid.UUID, status string, endedAt time.Time) error
+}
+
 type pgRepository struct {
-	pool *pgxpool.Pool
+	pool      *pgxpool.Pool
+	workflows workflowCloser
 }
 
 // NewPGRepository devuelve un Repository persistido en Postgres.
+//
+// El workflowCloser se arma acá y no se recibe por parámetro a propósito: se
+// deriva del mismo pool, así que no hay nada que un caller pueda olvidar
+// cablear. Un cierre de workflow que depende de que alguien se acuerde de
+// inyectar una dependencia opcional es justo el modo de falla que DOMAINSERV-230
+// vino a cerrar (policy guards-deben-ejecutarse).
 func NewPGRepository(pool *pgxpool.Pool) Repository {
-	return &pgRepository{pool: pool}
+	return &pgRepository{
+		pool:      pool,
+		workflows: &observability.PGWorkflowStore{Pool: pool},
+	}
 }
 
 // ErrAgentTemplateNotFound: el slug no está seedeado en la org. El caller
@@ -533,7 +555,38 @@ func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.U
 	if err != nil {
 		return fmt.Errorf("update flow_run status: %w", err)
 	}
+	r.closeWorkflowIfTerminal(ctx, flowRunID, status)
 	return nil
+}
+
+// closeWorkflowIfTerminal lleva el workflow de la corrida al mismo estado
+// terminal que el flow_run. Hasta DOMAINSERV-230 nadie escribía un estado
+// terminal en workflows: 'completed' y 'failed' estaban declarados y sin un solo
+// uso en todo el repo, así que las 20 filas de prod estaban en 'abandoned' —
+// puestas por el reaper de idle, no por un cierre real.
+//
+// Va por Upsert y no por UPDATE porque el cierre puede PRECEDER a la creación de
+// la fila: conWorkflowDeLaCorrida no envuelve domain_orchestrate ni
+// orchestrate_phase_result, que son justo los que llegan acá, así que un UPDATE
+// pelado no-operaría en silencio contra una fila que todavía no existe.
+func (r *pgRepository) closeWorkflowIfTerminal(ctx context.Context, flowRunID uuid.UUID, status string) {
+	st, ok := observability.TerminalWorkflowStatus(status)
+	if !ok {
+		return
+	}
+	if r.workflows == nil {
+		return
+	}
+	if err := r.workflows.CloseWorkflow(ctx, flowRunID, string(st), time.Now()); err != nil {
+		// El estado de la corrida ya se persistió y es la fuente de verdad: un
+		// fallo de observabilidad no puede volverlo atrás. Pero se logea, porque
+		// un cierre que se pierde sin dejar rastro es exactamente el defecto que
+		// este ticket cerró (policy structured-logging).
+		slog.WarnContext(ctx, "workflow close failed",
+			slog.String("flow_run_id", flowRunID.String()),
+			slog.String("status", status),
+			slog.String("error", err.Error()))
+	}
 }
 
 // SetFlowRunError persiste el motivo del fallo en flow_runs.error.

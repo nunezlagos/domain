@@ -159,7 +159,7 @@ func (f *FnLogger) EnterContext(ctx context.Context, fnName, pkg string, args []
 			DurationUS:   time.Since(start).Microseconds(),
 			Status:       status,
 			ErrorMessage: msg,
-			WorkflowID:   wfID.String(),
+			WorkflowID:   workflowIDForRow(wfID),
 		}:
 		default:
 			f.logger.Warn("fn log queue full, dropping",

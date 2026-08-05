@@ -6,6 +6,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -22,9 +23,35 @@ const (
 	WorkflowCompleted WorkflowStatus = "completed"
 	WorkflowFailed    WorkflowStatus = "failed"
 	WorkflowAbandoned WorkflowStatus = "abandoned"
+	WorkflowCancelled WorkflowStatus = "cancelled"
 )
 
+// TerminalWorkflowStatus traduce un status de flow_runs al de workflows y dice si
+// es terminal.
+//
+// Desde la migración 000283 el mapeo es IDENTIDAD para los tres estados
+// terminales, así que no hay traducción en la que equivocarse: la función existe
+// para RECHAZAR lo que no es terminal, no para convertir. Devolver ok=false ante
+// un status desconocido es deliberado — antes que inventar un cierre, no cerrar.
+func TerminalWorkflowStatus(flowStatus string) (WorkflowStatus, bool) {
+	switch flowStatus {
+	case string(WorkflowCompleted):
+		return WorkflowCompleted, true
+	case string(WorkflowFailed):
+		return WorkflowFailed, true
+	case string(WorkflowCancelled):
+		return WorkflowCancelled, true
+	default:
+		return "", false
+	}
+}
+
 // WorkflowRow es el row completo de workflows.
+//
+// ActorID, APIKeyID y ProjectID son punteros porque las tres columnas son
+// NULLables y "no hay actor" no es lo mismo que el uuid en ceros: con un
+// no-puntero, un NULL de la BD queda indistinguible de un centinela real al
+// serializar (DOMAINSERV-229). Mismo criterio que audit.AuditEntry.
 type WorkflowRow struct {
 	ID              uuid.UUID
 	Name            string
@@ -34,9 +61,9 @@ type WorkflowRow struct {
 	TotalToolCalls  int
 	TotalErrors     int
 	TotalDurationMS int64
-	ActorID         uuid.UUID
-	APIKeyID        uuid.UUID
-	ProjectID       uuid.UUID
+	ActorID         *uuid.UUID
+	APIKeyID        *uuid.UUID
+	ProjectID       *uuid.UUID
 	LastActivityAt  time.Time
 }
 
@@ -72,7 +99,7 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 	// (DOMAINSERV-212). Un workflow que no viene de una corrida no matchea y queda NULL:
 	// inventarlo seria peor que no tenerlo. El COALESCE del ON CONFLICT ademas repara las
 	// filas que ya nacieron sin el.
-	startedAt := nullableStartedAt(w.StartedAt)
+	startedAt := startedAtOrActivity(w.StartedAt, w.LastActivityAt)
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO workflows (
 			id, name, status, started_at, ended_at,
@@ -87,6 +114,25 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 					THEN COALESCE(EXCLUDED.started_at, now())
 				ELSE workflows.started_at
 			END,
+			-- El DO UPDATE no tocaba status ni ended_at, así que el cierre terminal
+			-- se perdía en silencio y una fila que el reaper dio por 'abandoned' no
+			-- podía volver a 'running' por más Touch que recibiera: quedaba muerta
+			-- con su ended_at congelado mientras seguía consumiendo tool calls
+			-- (DOMAINSERV-230, 8 de 20 filas en prod con ended_at < last_activity_at).
+			status = CASE
+				-- un cierre terminal es la única señal autoritativa del final y manda
+				-- siempre; en particular puede llegar ANTES de que exista la fila, y
+				-- entonces un Touch posterior no debe reabrirla
+				WHEN EXCLUDED.status <> 'running' THEN EXCLUDED.status
+				-- una fila dada por muerta que vuelve a recibir actividad revive
+				WHEN workflows.status = 'abandoned' THEN EXCLUDED.status
+				ELSE workflows.status
+			END,
+			ended_at = CASE
+				WHEN EXCLUDED.status <> 'running' THEN COALESCE(EXCLUDED.ended_at, EXCLUDED.last_activity_at)
+				WHEN workflows.status = 'abandoned' THEN NULL
+				ELSE workflows.ended_at
+			END,
 			last_activity_at = EXCLUDED.last_activity_at,
 			total_tool_calls = workflows.total_tool_calls + EXCLUDED.total_tool_calls,
 			total_errors = workflows.total_errors + EXCLUDED.total_errors,
@@ -94,7 +140,7 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 	`,
 		w.ID, w.Name, string(w.Status), startedAt, w.EndedAt,
 		w.TotalToolCalls, w.TotalErrors, w.TotalDurationMS,
-		nullableUUID(w.ActorID), nullableUUID(w.APIKeyID), nullableUUID(w.ProjectID),
+		nullableUUIDPtr(w.ActorID), nullableUUIDPtr(w.APIKeyID), nullableUUIDPtr(w.ProjectID),
 		w.LastActivityAt,
 	)
 	return err
@@ -111,6 +157,51 @@ func nullableStartedAt(t time.Time) *time.Time {
 	return &t
 }
 
+// startedAtOrActivity elige el started_at del INSERT usando UN SOLO reloj.
+//
+// Antes, un workflow de un solo Touch caía en el COALESCE($4, now()) y su
+// started_at lo ponía Postgres al ejecutar el statement, mientras que
+// last_activity_at venía del time.Now() de Go calculado ANTES de despachar la
+// query — y MarkWorkflowIdle hace ended_at = last_activity_at. Resultado:
+// started_at SIEMPRE posterior a ended_at, y siempre con el mismo signo (−25 ms,
+// −3 ms…), o sea que no era skew de relojes sino orden de ejecución
+// (DOMAINSERV-230). Duraciones negativas por construcción.
+//
+// El now() de la columna queda como último recurso, para el caller que no trae
+// ninguno de los dos.
+func startedAtOrActivity(startedAt, lastActivity time.Time) *time.Time {
+	if !startedAt.IsZero() {
+		return &startedAt
+	}
+	if !lastActivity.IsZero() {
+		return &lastActivity
+	}
+	return nil
+}
+
+// CloseWorkflow lleva el workflow de una corrida a su estado terminal.
+//
+// Reusa UpsertWorkflow en vez de un UPDATE porque el cierre puede llegar antes de
+// que exista la fila (DOMAINSERV-230): un UPDATE no-operaría en silencio y el
+// workflow quedaría sin cerrar para siempre. Los contadores van en 0 porque el
+// Upsert los SUMA — un cierre no aporta tool calls, solo el final.
+//
+// last_activity_at se setea al mismo endedAt para no dejar una fila cuyo último
+// latido sea posterior a su propio cierre, que es la inconsistencia que este
+// ticket midió en 8 de 20 filas de producción.
+func (s *PGWorkflowStore) CloseWorkflow(ctx context.Context, flowRunID uuid.UUID, status string, endedAt time.Time) error {
+	st, ok := TerminalWorkflowStatus(status)
+	if !ok {
+		return fmt.Errorf("observability: %q no es un estado terminal de workflow", status)
+	}
+	return s.UpsertWorkflow(ctx, WorkflowRow{
+		ID:             flowRunID,
+		Status:         st,
+		EndedAt:        &endedAt,
+		LastActivityAt: endedAt,
+	})
+}
+
 // MarkWorkflowIdle marca workflows running con last_activity_at < threshold como abandoned.
 // Devuelve el numero de rows afectados.
 func (s *PGWorkflowStore) MarkWorkflowIdle(ctx context.Context, olderThan time.Duration) (int, error) {
@@ -118,9 +209,14 @@ func (s *PGWorkflowStore) MarkWorkflowIdle(ctx context.Context, olderThan time.D
 		return 0, ErrStoreNotReady
 	}
 	threshold := time.Now().Add(-olderThan)
+	// GREATEST y no last_activity_at pelado: una fila cuyo started_at quedó
+	// adelantado por el bug de los dos relojes (DOMAINSERV-230) dejaría un
+	// ended_at anterior a su propio inicio, o sea una duración negativa. El
+	// GREATEST es defensa en profundidad para las filas que ya nacieron torcidas:
+	// el fix de startedAtOrActivity evita las nuevas, no repara las viejas.
 	tag, err := s.Pool.Exec(ctx, `
 		UPDATE workflows
-		SET status = 'abandoned', ended_at = last_activity_at
+		SET status = 'abandoned', ended_at = GREATEST(last_activity_at, started_at)
 		WHERE status = 'running' AND last_activity_at < $1
 	`, threshold)
 	if err != nil {
@@ -135,12 +231,9 @@ func (s *PGWorkflowStore) GetWorkflow(ctx context.Context, id uuid.UUID) (Workfl
 		return WorkflowRow{}, ErrStoreNotReady
 	}
 	var (
-		w       WorkflowRow
-		status  string
-		name    *string
-		actor   *uuid.UUID
-		apiKey  *uuid.UUID
-		project *uuid.UUID
+		w      WorkflowRow
+		status string
+		name   *string
 	)
 	err := s.Pool.QueryRow(ctx, `
 		SELECT id, name, status, started_at, ended_at,
@@ -149,22 +242,13 @@ func (s *PGWorkflowStore) GetWorkflow(ctx context.Context, id uuid.UUID) (Workfl
 		FROM workflows WHERE id = $1
 	`, id).Scan(&w.ID, &name, &status, &w.StartedAt, &w.EndedAt,
 		&w.TotalToolCalls, &w.TotalErrors, &w.TotalDurationMS,
-		&actor, &apiKey, &project, &w.LastActivityAt)
+		&w.ActorID, &w.APIKeyID, &w.ProjectID, &w.LastActivityAt)
 	if err != nil {
 		return WorkflowRow{}, err
 	}
 	w.Status = WorkflowStatus(status)
 	if name != nil {
 		w.Name = *name
-	}
-	if actor != nil {
-		w.ActorID = *actor
-	}
-	if apiKey != nil {
-		w.APIKeyID = *apiKey
-	}
-	if project != nil {
-		w.ProjectID = *project
 	}
 	return w, nil
 }

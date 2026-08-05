@@ -200,7 +200,7 @@ func (h *HTTPLogger) Middleware(next http.Handler) http.Handler {
 			BytesIn:    int(r.ContentLength),
 			BytesOut:   rw.bytes,
 			UserAgent:  r.UserAgent(),
-			WorkflowID: wfID.String(),
+			WorkflowID: workflowIDForRow(wfID),
 		})
 	})
 }

@@ -89,7 +89,7 @@ func (t *ErrorTracker) Record(ctx context.Context, err error, source string) {
 		Severity:    defaultSeverity(cat),
 		Message:     err.Error(),
 		Fingerprint: Fingerprint(cat, err.Error(), source, ""),
-		WorkflowID:  WorkflowIDFromContext(ctx).String(),
+		WorkflowID:  workflowIDForRow(WorkflowIDFromContext(ctx)),
 	}
 	select {
 	case <-t.done:

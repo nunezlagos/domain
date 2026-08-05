@@ -192,3 +192,16 @@ func nullableUUID(u uuid.UUID) any {
 	}
 	return u
 }
+
+// nullableUUIDPtr es la versión para columnas cuyo campo Go ya es un puntero.
+// Colapsa los DOS no-valores al mismo NULL: el puntero nil y el puntero a
+// uuid.Nil. El segundo caso es el que dejó el centinela en producción
+// (DOMAINSERV-229) — un caller que arma la fila con un uuid.Nil "vacío" no
+// debería poder persistirlo, así que la normalización vive en el borde de la
+// escritura y no en la disciplina de cada caller.
+func nullableUUIDPtr(u *uuid.UUID) any {
+	if u == nil || *u == uuid.Nil {
+		return nil
+	}
+	return *u
+}

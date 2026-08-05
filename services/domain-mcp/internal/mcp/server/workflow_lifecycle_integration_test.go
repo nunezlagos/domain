@@ -4,6 +4,7 @@ package mcpserver_test
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -160,6 +161,56 @@ func TestUpsertWorkflow_FilaCerrada_NoLaReabreUnTouchTardio(t *testing.T) {
 	require.NotNil(t, w.EndedAt)
 }
 
+// La contracara de la reapertura, y el caso que la refutación adversarial exigió:
+// una fila 'abandoned' NO puede revivir si su corrida ya cerró. Sin el NOT EXISTS
+// contra flow_runs, una tool call rezagada resucita como 'running' el workflow de un
+// flow_run terminal — peor que el 'abandoned' que la reapertura venía a arreglar,
+// porque inventa una corrida viva que no existe.
+func TestUpsertWorkflow_CorridaYaTerminal_NoRevivePorMasQueLlegueActividad(t *testing.T) {
+	srv, projectID, store, cleanup := setupWorkflowMCP(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	startTxt := callOrchTool(t, srv, "domain_orchestrate", map[string]any{
+		"raw_text":   "fix typo en README",
+		"mode":       "express",
+		"project_id": projectID,
+	})
+	var start struct {
+		FlowRunID string `json:"flow_run_id"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(startTxt), &start))
+	flowRunID := uuid.MustParse(start.FlowRunID)
+
+	// una tool call declara la corrida, así nace la fila de workflow
+	callOrchTool(t, srv, "domain_flow_status", map[string]any{"flow_run_id": start.FlowRunID})
+
+	// el reaper la da por muerta
+	_, err := store.Pool.Exec(ctx,
+		`UPDATE workflows SET last_activity_at = now() - interval '1 hour' WHERE id = $1`, flowRunID)
+	require.NoError(t, err)
+	n, err := store.MarkWorkflowIdle(ctx, time.Minute)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+
+	// y la corrida cierra de verdad
+	_, err = store.Pool.Exec(ctx,
+		`UPDATE flow_runs SET status = 'completed', finished_at = now() WHERE id = $1`, flowRunID)
+	require.NoError(t, err)
+
+	// llega una tool call rezagada
+	require.NoError(t, store.UpsertWorkflow(ctx, observability.WorkflowRow{
+		ID: flowRunID, Status: observability.WorkflowRunning, TotalToolCalls: 1,
+		LastActivityAt: time.Now().UTC(),
+	}))
+
+	w, err := store.GetWorkflow(ctx, flowRunID)
+	require.NoError(t, err)
+	require.Equal(t, observability.WorkflowAbandoned, w.Status,
+		"la corrida ya cerró: una tool call rezagada no puede resucitar el workflow como running")
+	require.NotNil(t, w.EndedAt, "y su ended_at no puede volver a NULL")
+}
+
 // El defecto #3: dos relojes. started_at caía en el now() de Postgres al ejecutar el
 // statement y last_activity_at venía del time.Now() de Go calculado antes de
 // despachar la query, y MarkWorkflowIdle hace ended_at = last_activity_at. Para un
@@ -186,6 +237,37 @@ func TestUpsertWorkflow_UnSoloTouch_LaDuracionNoEsNegativa(t *testing.T) {
 	require.False(t, w.StartedAt.After(*w.EndedAt),
 		"un workflow de un solo touch no puede durar menos que cero: started_at=%s ended_at=%s",
 		w.StartedAt, *w.EndedAt)
+}
+
+// El invariante que declara la migración 000284. Va como NOT VALID, así que no revisa el
+// histórico — pero SÍ tiene que rechazar toda fila nueva. Un constraint declarado que no
+// rechaza nada es la versión SQL de un guard que no se ejecuta.
+func TestWorkflows_ElInvarianteRechazaUnaDuracionNegativa(t *testing.T) {
+	store, cleanup := storeParaLifecycle(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	ahora := time.Now().UTC()
+	_, err := store.Pool.Exec(ctx, `
+		INSERT INTO workflows (id, status, started_at, ended_at, last_activity_at, metadata)
+		VALUES ($1, 'completed', $2, $3, $2, '{}'::jsonb)`,
+		uuid.New(), ahora, ahora.Add(-time.Minute))
+	require.Error(t, err, "una duración negativa no puede entrar a la tabla")
+	require.Contains(t, err.Error(), "workflows_ended_after_started",
+		"y el que la rechaza tiene que ser el constraint del invariante, no otra cosa")
+}
+
+// La contracara: ended_at NULL está permitido a propósito, porque es una corrida VIVA. Si
+// el constraint lo rechazara, ningún workflow podría abrirse.
+func TestWorkflows_ElInvarianteAceptaEndedAtNulo(t *testing.T) {
+	store, cleanup := storeParaLifecycle(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	require.NoError(t, store.UpsertWorkflow(ctx, observability.WorkflowRow{
+		ID: uuid.New(), Status: observability.WorkflowRunning,
+		LastActivityAt: time.Now().UTC(),
+	}), "una corrida viva no tiene ended_at y tiene que poder existir")
 }
 
 // DOMAINSERV-229, camino de lectura contra la BD real: un workflow sin actor tiene

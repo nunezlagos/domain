@@ -569,6 +569,15 @@ func (r *pgRepository) UpdateFlowRunStatus(ctx context.Context, flowRunID uuid.U
 // la fila: conWorkflowDeLaCorrida no envuelve domain_orchestrate ni
 // orchestrate_phase_result, que son justo los que llegan acá, así que un UPDATE
 // pelado no-operaría en silencio contra una fila que todavía no existe.
+//
+// ESTE NO ES EL ÚNICO CHOKE POINT, y conviene saberlo antes de confiar en él:
+// UpdateFlowRunStatus cubre solo los cierres que pasan por este paquete. Los otros
+// writers que llevan flow_runs a un estado terminal son runner/flow/runner.go:396,
+// runner/flow/resume.go:224, runner/flow/recovery.go:84/103/132,
+// service/flow/pg_repository.go:257 y scheduler/cron/system/heartbeat_watcher.go:161.
+// Hoy ninguno produce filas en workflows —esas filas nacen del hook de métricas del
+// MCP— así que no cerrar por ahí no deja nada abierto. El día que una corrida del
+// runner genere su fila de workflow, ese camino necesita este mismo cierre.
 func (r *pgRepository) closeWorkflowIfTerminal(ctx context.Context, flowRunID uuid.UUID, status string) {
 	st, ok := observability.TerminalWorkflowStatus(status)
 	if !ok {

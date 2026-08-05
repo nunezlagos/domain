@@ -124,13 +124,24 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 				-- siempre; en particular puede llegar ANTES de que exista la fila, y
 				-- entonces un Touch posterior no debe reabrirla
 				WHEN EXCLUDED.status <> 'running' THEN EXCLUDED.status
-				-- una fila dada por muerta que vuelve a recibir actividad revive
-				WHEN workflows.status = 'abandoned' THEN EXCLUDED.status
+				-- una fila dada por muerta que vuelve a recibir actividad revive,
+				-- PERO solo si su corrida sigue viva: sin el NOT EXISTS, una tool
+				-- call rezagada resucita como 'running' el workflow de un flow_run
+				-- que ya cerró, y eso es peor que el 'abandoned' que venía a arreglar
+				WHEN workflows.status = 'abandoned' AND NOT EXISTS (
+					SELECT 1 FROM flow_runs f
+					WHERE f.id = workflows.id
+					  AND f.status IN ('completed', 'failed', 'cancelled')
+				) THEN EXCLUDED.status
 				ELSE workflows.status
 			END,
 			ended_at = CASE
 				WHEN EXCLUDED.status <> 'running' THEN COALESCE(EXCLUDED.ended_at, EXCLUDED.last_activity_at)
-				WHEN workflows.status = 'abandoned' THEN NULL
+				WHEN workflows.status = 'abandoned' AND NOT EXISTS (
+					SELECT 1 FROM flow_runs f
+					WHERE f.id = workflows.id
+					  AND f.status IN ('completed', 'failed', 'cancelled')
+				) THEN NULL
 				ELSE workflows.ended_at
 			END,
 			last_activity_at = EXCLUDED.last_activity_at,

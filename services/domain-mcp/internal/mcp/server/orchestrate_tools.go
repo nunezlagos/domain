@@ -404,6 +404,14 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		}
 	}
 
+	// El glob se valida al EMITIR y no al editar (DOMAINSERV-218). Un "**/*.go"
+	// tiene scope vacío: como allowlist de batch-mode no acota nada, y hace que
+	// cualquier par de sub-tareas se solape. Aceptarlo devolvería un token que
+	// parece scopeado y no lo está, que es peor que negarlo acá.
+	if err := flowsvc.ValidarAllowlist(allowedPaths); err != nil {
+		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
+	}
+
 	token, err := h.flowToken.GenerateToken(flowRunID, sessionID, h.principal.OrganizationID, allowedPaths...)
 	if err != nil {
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil

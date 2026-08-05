@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
@@ -60,10 +61,28 @@ type catalogHandlers struct {
 	principal  *apikey.Principal
 }
 
+// poolDelMerge devuelve el pool con el que el merge puede mover knowledge_docs de un proyecto
+// a otro. Desde el RLS de DOMAINSERV-185 eso es IMPOSIBLE con el pool de la app: la policy
+// filtra por app.current_project_id, así que ninguna tx puede a la vez VER las filas del
+// proyecto origen y ESCRIBIR las del destino — cualquier GUC que se setee deja una de las dos
+// mitades afuera. app_admin tiene BYPASSRLS y el merge es cross-project por definición, no
+// una query de usuario que se olvidó del scope.
+//
+// Si PoolAuth no está configurado (DOMAIN_DATABASE_AUTH_URL es opcional y hace fallback al
+// pool de la app) el merge queda con app_user y el RLS lo va a rechazar. Se devuelve el pool
+// igual en vez de fallar al arrancar: que el merge falle cuando alguien lo invoque es
+// preferible a que el server entero no levante por una tool de administración.
+func poolDelMerge(deps Deps) *pgxpool.Pool {
+	if deps.PoolAuth != nil {
+		return deps.PoolAuth
+	}
+	return deps.Pool
+}
+
 func registerCatalogTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	h := &catalogHandlers{
 		projects:   deps.Projects,
-		merge:      &projectmerge.Service{Pool: deps.Pool},
+		merge:      &projectmerge.Service{Pool: poolDelMerge(deps)},
 		agents:     deps.Agents,
 		flows:      deps.Flows,
 		crons:      deps.Crons,

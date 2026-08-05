@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -19,6 +20,7 @@ import (
 	dmigrate "nunezlagos/domain/internal/migrate"
 	"nunezlagos/domain/internal/service/knowledge"
 	projsvc "nunezlagos/domain/internal/service/project"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type fix struct {
@@ -26,6 +28,25 @@ type fix struct {
 	orgID     uuid.UUID
 	projectID uuid.UUID
 	userID    uuid.UUID
+}
+
+// enScope abre una tx con app.current_project_id seteado al proyecto del fixture y devuelve
+// el ctx que la lleva, más su cierre.
+//
+// DOMAINSERV-185: con el RLS de la 000287 un Save contra un context.Background() pelado lo
+// rechaza el WITH CHECK ("new row violates row-level security policy"), así que este es el
+// único camino por el que un test puede escribir knowledge — y es el mismo que usa
+// producción vía rlsProyecto. El cierre es un Rollback y no un Commit a propósito: cada test
+// levanta su propio container, así que no hay nada que valga la pena persistir, y un rollback
+// no puede dejar la tx colgada reteniendo el lock que después el cleanup espera.
+func (f *fix) enScope(t *testing.T) (context.Context, func()) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := f.svc.Pool.BeginTx(ctx, pgx.TxOptions{})
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, `SELECT set_config('app.current_project_id', $1, true)`, f.projectID.String())
+	require.NoError(t, err)
+	return txctx.WithTxContext(ctx, tx), func() { _ = tx.Rollback(ctx) }
 }
 
 func setup(t *testing.T) (*fix, func()) {
@@ -69,7 +90,8 @@ func setup(t *testing.T) (*fix, func()) {
 func TestKnowledge_Save_ShortDocSingleChunk(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
+	ctx, done := f.enScope(t)
+	defer done()
 	doc, chunks, err := f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID, CreatedBy: &f.userID,
 		Title: "Arquitectura del sistema",
@@ -84,7 +106,8 @@ func TestKnowledge_Save_ShortDocSingleChunk(t *testing.T) {
 func TestKnowledge_Save_LongDocMultipleChunks(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
+	ctx, done := f.enScope(t)
+	defer done()
 	body := strings.Repeat("Este es un párrafo importante.\n\n", 200)
 	doc, chunks, err := f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
@@ -111,11 +134,15 @@ func TestKnowledge_Save_TitleRequired(t *testing.T) {
 func TestKnowledge_Get_ReturnsDocPlusChunks(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
-	doc, _, _ := f.svc.Save(ctx, knowledge.SaveInput{
+	ctx, done := f.enScope(t)
+	defer done()
+	// el error de Save deja de ignorarse: con `doc, _, _ :=` un INSERT rechazado por RLS
+	// aparecía como un SIGSEGV al desreferenciar doc nil, no como el error que fue
+	doc, _, err := f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Title: "T", Body: strings.Repeat("hola amigo. ", 300),
 	})
+	require.NoError(t, err)
 	got, chunks, err := f.svc.Get(ctx, f.projectID, doc.ID)
 	require.NoError(t, err)
 	require.Equal(t, doc.ID, got.ID)
@@ -125,7 +152,8 @@ func TestKnowledge_Get_ReturnsDocPlusChunks(t *testing.T) {
 func TestKnowledge_SearchHybrid_Semantic(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
+	ctx, done := f.enScope(t)
+	defer done()
 	_, _, _ = f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
 		Title: "A", Body: "El sistema usa pgvector para búsqueda semántica con cosine.",
@@ -144,7 +172,8 @@ func TestKnowledge_SearchHybrid_Semantic(t *testing.T) {
 func TestKnowledge_SearchHybrid_NopEmbedderDegradesToTSVector(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
+	ctx, done := f.enScope(t)
+	defer done()
 	f.svc.Embedder = llm.NopEmbedder{Dim: dmigrate.EmbeddingDim}
 	_, _, _ = f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID,
@@ -158,7 +187,8 @@ func TestKnowledge_SearchHybrid_NopEmbedderDegradesToTSVector(t *testing.T) {
 func TestKnowledge_ListByProject(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
+	ctx, done := f.enScope(t)
+	defer done()
 	_, _, _ = f.svc.Save(ctx, knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.projectID, Title: "A", Body: "a",
 	})
@@ -170,16 +200,28 @@ func TestKnowledge_ListByProject(t *testing.T) {
 	require.Len(t, list, 2)
 }
 
+// DOMAINSERV-185: dos cambios acá y los dos importan. (1) El test pasa por
+// conScopeDeProyecto: con el RLS de la 000287 un Save sin app.current_project_id lo rechaza
+// el WITH CHECK, y ese es el camino que producción ya usa. (2) El error de Save DEJA de
+// ignorarse — decía `doc, _, _ :=`, así que cuando el INSERT empezó a fallar el test no
+// reportaba el error de RLS sino un SIGSEGV al desreferenciar doc nil. Tragarse un error
+// convierte un fallo diagnosticable en un panic que no dice nada.
 func TestKnowledge_SoftDelete(t *testing.T) {
 	f, cleanup := setup(t)
 	defer cleanup()
-	ctx := context.Background()
-	doc, _, _ := f.svc.Save(ctx, knowledge.SaveInput{
-		OrganizationID: f.orgID, ProjectID: f.projectID, Title: "T", Body: "y",
+
+	err := conScopeDeProyecto(t, f.svc.Pool, f.projectID, func(scoped context.Context) error {
+		doc, _, err := f.svc.Save(scoped, knowledge.SaveInput{
+			OrganizationID: f.orgID, ProjectID: f.projectID, Title: "T", Body: "y",
+		})
+		require.NoError(t, err)
+
+		require.NoError(t, f.svc.SoftDelete(scoped, f.projectID, doc.ID, f.userID))
+		_, _, err = f.svc.Get(scoped, f.projectID, doc.ID)
+		require.ErrorIs(t, err, knowledge.ErrNotFound)
+		return nil
 	})
-	require.NoError(t, f.svc.SoftDelete(ctx, f.projectID, doc.ID, f.userID))
-	_, _, err := f.svc.Get(ctx, f.projectID, doc.ID)
-	require.ErrorIs(t, err, knowledge.ErrNotFound)
+	require.NoError(t, err)
 }
 
 // Sabotaje: cross-org search no leak

@@ -437,6 +437,7 @@ func main() {
 		PromptRouter:     promptRouterSvc,
 		WorkflowImport:   workflowImportSvc,
 		Pool:             pools.App,
+		PoolAuth:         pools.Auth,
 		Principal:        principal,
 		ErrorTracker:     errorTracker,  // issue-53.9
 		Dispatcher:       mcpDispatcher, // issue-35.1

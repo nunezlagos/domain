@@ -92,6 +92,7 @@ type Deps struct {
 	PromptRouter     *prouter.Router             // issue-12.7 single-shot prompt router
 	WorkflowImport   *workflowimport.Service     // issue-12.7 override de .md
 	Pool             *pgxpool.Pool               // para queries de agent_run_logs
+	PoolAuth         *pgxpool.Pool               // app_admin (BYPASSRLS) — solo para operaciones cross-project por diseño, ver projectmerge en catalog_tools.go
 	Principal        *apikey.Principal           // resuelto al boot
 	ErrorTracker     *observability.ErrorTracker // issue-53.9 captura el error SQL real en tx abortadas
 

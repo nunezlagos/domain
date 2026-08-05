@@ -81,6 +81,18 @@ func TestKnowledge_Save_ConTxEnElContexto_NoCommiteaPorSuCuenta(t *testing.T) {
 
 	tx, err := f.svc.Pool.BeginTx(ctx, pgx.TxOptions{})
 	require.NoError(t, err)
+	// el rollback va en defer y NO solo al final: con el RLS activo un Save que falla corta
+	// el test en el require, la tx queda abierta reteniendo su lock, y el cleanup del
+	// fixture espera ese lock hasta el timeout de 8 minutos del paquete. Un test que falla
+	// tiene que fallar rápido y con su mensaje, no colgar la suite entera.
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// DOMAINSERV-185: el GUC va DENTRO de esta tx. Sin él el INSERT lo rechaza el WITH CHECK
+	// y este test dejaría de medir lo suyo —que Save respeta la tx del contexto— para morir
+	// antes, en el permiso.
+	_, err = tx.Exec(ctx, `SELECT set_config('app.current_project_id', $1, true)`, f.proyectoA.String())
+	require.NoError(t, err)
+
 	doc, _, err := f.svc.Save(txctx.WithTxContext(ctx, tx), knowledge.SaveInput{
 		OrganizationID: f.orgID, ProjectID: f.proyectoA, CreatedBy: &f.userID,
 		Title: "Borrador que no debe sobrevivir", Body: "contenido de una tx abortada",
@@ -88,8 +100,14 @@ func TestKnowledge_Save_ConTxEnElContexto_NoCommiteaPorSuCuenta(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Rollback(ctx))
 
-	_, _, err = f.svc.Get(ctx, f.proyectoA, doc.ID)
-	require.ErrorIs(t, err, knowledge.ErrNotFound,
-		"Save ignoró la tx del contexto y commiteó por su cuenta: el doc sobrevivió al "+
-			"rollback, así que el INSERT corre fuera del alcance del GUC de proyecto")
+	// el Get va CON scope, y eso es lo que hace que la aserción siga midiendo lo que dice:
+	// un Get sin GUC devolvería ErrNotFound por el RLS y el test pasaría igual con Save
+	// commiteando por su cuenta. La segunda capa enmascararía justo el defecto buscado.
+	require.NoError(t, conScopeDeProyecto(t, f.svc.Pool, f.proyectoA, func(scoped context.Context) error {
+		_, _, err := f.svc.Get(scoped, f.proyectoA, doc.ID)
+		require.ErrorIs(t, err, knowledge.ErrNotFound,
+			"Save ignoró la tx del contexto y commiteó por su cuenta: el doc sobrevivió al "+
+				"rollback, así que el INSERT corre fuera del alcance del GUC de proyecto")
+		return nil
+	}))
 }

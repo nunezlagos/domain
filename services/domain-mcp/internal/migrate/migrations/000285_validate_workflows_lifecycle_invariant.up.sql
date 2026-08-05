@@ -1,0 +1,37 @@
+-- migration: 000285_validate_workflows_lifecycle_invariant
+-- author: nunezlagos
+-- issue: DOMAINSERV-230
+-- description: valida el constraint workflows_ended_after_started que 000284 dejó NOT VALID
+--   a propósito, cerrando el patrón ADD NOT VALID → VALIDATE de la policy migration-safety
+-- breaking: no
+-- estimated_duration: subsegundo (23.234 filas, un CHECK escalar sin subqueries; el lock
+--   es SHARE UPDATE EXCLUSIVE, que NO bloquea SELECT, INSERT ni UPDATE — solo otro DDL)
+--
+-- POR QUÉ AHORA Y NO EN 000284: la 000284 declaró el invariante NOT VALID y dejó escrito el
+-- motivo — "el orden correcto es confirmar el backfill contra prod y recién entonces validar
+-- en una migración aparte". Un VALIDATE en el mismo archivo que el backfill habría atado el
+-- éxito del deploy a que los cuatro UPDATE repararan CADA fila torcida, sin evidencia previa
+-- de que lo hacían. Esa condición ya no es una apuesta.
+--
+-- LA MEDICIÓN QUE HABILITA ESTA MIGRACIÓN (prod, 2026-08-05, post-deploy de bd93f525):
+--   schema_migrations                      version=284 dirty=false
+--   workflows                              23.234 filas (1 con ended_at NULL, corrida viva)
+--   ended_at IS NOT NULL AND ended_at < started_at    0     ← era 19.265 antes de 000284
+--   workflows_ended_after_started          existe, convalidated=false
+-- O sea: el backfill hizo lo que declaraba, y no queda una sola fila que VALIDATE pueda
+-- rechazar.
+--
+-- POR QUÉ ESTO NO PUEDE REVENTAR EL DEPLOY, que es la única pregunta que importa acá: un
+-- VALIDATE que encuentra una fila violatoria ABORTA el migrate y deja el deploy a medias. No
+-- puede pasar, y no por confianza en el código de aplicación: desde 000284 el constraint
+-- —aunque esté NOT VALID— YA rechaza todo INSERT y UPDATE que viole el predicado. NOT VALID
+-- solo exime a las filas PREEXISTENTES, nunca a las nuevas. Entonces el conjunto de filas
+-- violatorias posibles es exactamente el que había antes de 000284, y ese conjunto quedó
+-- vacío. Cualquier fila nacida después ya fue validada de a una por el propio constraint.
+--
+-- QUÉ CAMBIA DE VERDAD: nada en runtime — el constraint ya se aplicaba a las escrituras. Lo
+-- que cambia es que el planner puede confiar en el predicado, y que el schema deja de
+-- declarar "esto vale para lo nuevo pero no sé qué hay en lo viejo". El invariante pasa a ser
+-- una propiedad de la tabla entera.
+
+ALTER TABLE workflows VALIDATE CONSTRAINT workflows_ended_after_started;

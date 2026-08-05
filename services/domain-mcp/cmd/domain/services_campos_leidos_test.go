@@ -153,14 +153,26 @@ func fuentesDelModulo(t *testing.T, raiz string) []string {
 	return fuentes
 }
 
+// raizDelModuloDeCmd sube hasta el go.mod en vez de contar `..` desde el cwd.
+//
+// Contar niveles asume que el runner posiciona el cwd en el directorio del paquete, y
+// eso NO se cumple siempre: con `go test ./cmd/domain/` el test pasaba y con
+// `go test ./...` el mismo test resolvía la raíz del REPO en vez del módulo y fallaba.
+// Un guard que depende de cómo se lo invoque falla por el motivo equivocado.
 func raizDelModuloDeCmd(t *testing.T) string {
 	t.Helper()
-	dir, err := filepath.Abs(filepath.Join("..", ".."))
+	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
-		t.Fatalf("no se resolvió la raíz del módulo: %v", err)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		padre := filepath.Dir(dir)
+		if padre == dir {
+			t.Fatalf("no se encontró go.mod subiendo desde %s", dir)
+		}
+		dir = padre
 	}
-	return dir
 }

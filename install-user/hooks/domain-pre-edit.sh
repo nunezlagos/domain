@@ -1183,6 +1183,55 @@ if re.search(INTERPRETES, cmd):
           [ "$current_hash" = "$stored_hash" ] && fresh="yes"
         fi
       fi
+      # DOMAINSERV-237: el hash prueba que el código no cambió DESPUÉS de la
+      # corrida, no que la corrida lo haya EVALUADO. Con el orden normal del flujo
+      # (editar → add → test → commit) el hash coincide igual aunque la corrida
+      # haya sido de otro paquete. Falta cruzar el alcance recorrido (field4) con
+      # los .go que se van a commitear.
+      #
+      # Solo aplica a los markers escritos por `go test` (field5="go"): los demás
+      # runners conservan su alcance histórico de repo entero, y exigirle cobertura
+      # por path a una suite de bash denegaría commits legítimos.
+      if [ "$fresh" = "yes" ] && [ "$(cut -f5 "$marker" 2>/dev/null | head -1)" = "go" ]; then
+        sin_cubrir=$(SCOPES="$(cut -f4 "$marker" 2>/dev/null | head -1)" python3 -c '
+import os, subprocess, sys
+
+scopes = [s for s in (os.environ.get("SCOPES") or "").split() if s]
+if not scopes:
+    # marker de go SIN alcance: fail-closed (mismo criterio que DOMAINSERV-95 con
+    # el hash ausente). Un marker sin alcance no acredita cobertura de nada.
+    print("(alcance no registrado)")
+    sys.exit(0)
+
+def sh(*a):
+    try:
+        return subprocess.run(a, capture_output=True, text=True, timeout=10).stdout.split("\n")
+    except Exception:
+        return []
+
+raiz = (sh("git", "rev-parse", "--show-toplevel") or [""])[0].strip()
+if not raiz:
+    sys.exit(0)
+
+cambiados = set()
+for rel in sh("git", "diff", "--name-only", "HEAD") + sh("git", "ls-files", "--others", "--exclude-standard"):
+    rel = rel.strip()
+    if rel.endswith(".go"):
+        cambiados.add(os.path.join(raiz, rel))
+
+def cubierto(p):
+    d = os.path.dirname(p)
+    return any(d == s or d.startswith(s.rstrip("/") + "/") for s in scopes)
+
+faltan = sorted(p[len(raiz) + 1:] for p in cambiados if not cubierto(p))
+if faltan:
+    print(" ".join(faltan[:5]))
+' 2>/dev/null)
+        if [ -n "$sin_cubrir" ]; then
+          fresh=""
+          gate_motivo_alcance="$sin_cubrir"
+        fi
+      fi
     fi
     # bypass de un solo uso que crea el humano: en modos automáticos el deny de
     # abajo es duro y el gate quedaba insatisfacible (DOMAINSERV-195)
@@ -1200,7 +1249,11 @@ if re.search(INTERPRETES, cmd):
         default|plan) commit_dec="ask" ;;
         *)            commit_dec="deny" ;;
       esac
-      emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corre la suite de tests antes de commitear. Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit con: echo 'tu razón' > $bypass"
+      if [ -n "${gate_motivo_alcance:-}" ]; then
+        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-237): la corrida de tests NO cubrió estos archivos: ${gate_motivo_alcance}. Que el código no haya cambiado desde la corrida no prueba que la corrida lo haya evaluado. Corré la suite recursiva del módulo que los contiene, con -count=1 y sin -run: \`go test -count=1 ./...\` desde la raíz del módulo. Si de verdad no se pueden correr acá, autorizá UN commit con: echo 'tu razón' > $bypass"
+      else
+        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corré la suite con \`go test -count=1 ./...\` (el -count=1 es obligatorio: sin él la corrida puede venir entera del cache y no evalúa nada). Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit con: echo 'tu razón' > $bypass"
+      fi
     fi
   fi
 fi

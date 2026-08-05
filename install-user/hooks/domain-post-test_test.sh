@@ -27,13 +27,25 @@ check() { # descripción, esperado, actual
 resp_ok='{"stdout":"ok  \tpkg\t0.5s\nPASS","stderr":"","interrupted":false,"isImage":false}'
 resp_fail='{"stdout":"--- FAIL: TestX\nFAIL\tpkg\t0.2s","stderr":"","interrupted":false,"isImage":false}'
 
-# 1) go test que pasa (dict sin exit_code, sin señales de fallo) → marker escrito
-check "go test OK -> marker escrito" "yes" \
-  "$(run "s1" "{\"session_id\":\"s1\",\"tool_input\":{\"command\":\"go test ./...\"},\"tool_response\":$resp_ok}")"
+# 1) go test que pasa (dict sin exit_code, sin señales de fallo) → marker escrito.
+#    DOMAINSERV-237: el -count=1 es parte del contrato de qué corrida vale como
+#    prueba. Este caso decía `go test ./...` y codificaba el contrato VIEJO.
+check "go test OK con -count=1 -> marker escrito" "yes" \
+  "$(run "s1" "{\"session_id\":\"s1\",\"tool_input\":{\"command\":\"go test -count=1 ./...\"},\"tool_response\":$resp_ok}")"
 
-# 2) go test que falla (FAIL en output) → sin marker
+# 1b) DOMAINSERV-237: las tres formas de salir verde SIN haber evaluado nada. Son
+#     el guard del lado escritor: sin ellas, el fix se sostiene por disciplina.
+check "go test SIN -count=1 -> no es prueba (puede ser 100% cache)" "no" \
+  "$(run "s1b" "{\"session_id\":\"s1b\",\"tool_input\":{\"command\":\"go test ./...\"},\"tool_response\":$resp_ok}")"
+check "go test con -run acotado -> no es prueba" "no" \
+  "$(run "s1c" "{\"session_id\":\"s1c\",\"tool_input\":{\"command\":\"go test -count=1 -run TestNada ./...\"},\"tool_response\":$resp_ok}")"
+check "go test de un paquete suelto (sin ./...) -> no es prueba" "no" \
+  "$(run "s1d" "{\"session_id\":\"s1d\",\"tool_input\":{\"command\":\"go test -count=1 ./internal/config/\"},\"tool_response\":$resp_ok}")"
+
+# 2) go test que falla (FAIL en output) → sin marker. Con -count=1 para que el
+#    caso siga midiendo la detección del ROJO y no el -count=1 que falta.
 check "go test FAIL -> sin marker" "no" \
-  "$(run "s2" "{\"session_id\":\"s2\",\"tool_input\":{\"command\":\"go test ./...\"},\"tool_response\":$resp_fail}")"
+  "$(run "s2" "{\"session_id\":\"s2\",\"tool_input\":{\"command\":\"go test -count=1 ./...\"},\"tool_response\":$resp_fail}")"
 
 # 3) comando que no es test → no-op (sin marker)
 check "no-test -> sin marker" "no" \
@@ -42,7 +54,7 @@ check "no-test -> sin marker" "no" \
 # 4) interrupted=true → sin marker aunque no haya FAIL en output
 resp_intr='{"stdout":"running...","stderr":"","interrupted":true,"isImage":false}'
 check "interrumpido -> sin marker" "no" \
-  "$(run "s4" "{\"session_id\":\"s4\",\"tool_input\":{\"command\":\"go test ./...\"},\"tool_response\":$resp_intr}")"
+  "$(run "s4" "{\"session_id\":\"s4\",\"tool_input\":{\"command\":\"go test -count=1 ./...\"},\"tool_response\":$resp_intr}")"
 
 # 5) DOMAINSERV-111: suites en bash (`bash x_test.sh`, `./x_test.sh`, `make test`).
 #    Los hooks de install-user se testean así: sin este patrón el commit-gate

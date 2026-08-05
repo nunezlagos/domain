@@ -85,8 +85,14 @@ func payloadCorridaVerde(t *testing.T) string {
 		"session_id":      sesionGate,
 		"hook_event_name": "PostToolUse",
 		"tool_name":       "Bash",
-		"tool_input":      map[string]any{"command": "go test ./..."},
-		"tool_response":   map[string]any{"stdout": "ok  domain 0.4s", "stderr": "", "interrupted": false},
+		// DOMAINSERV-237: el -count=1 pasó a ser parte del contrato de qué corrida
+		// vale como prueba — sin él la suite puede venir entera del cache. Antes
+		// esta fixture decía `go test ./...` y con el contrato nuevo deja de
+		// escribir marker, así que los 3 tests de DOMAINSERV-219 fallaban por el
+		// motivo equivocado: no porque su invariante se rompiera, sino porque su
+		// corrida verde ya no califica.
+		"tool_input":    map[string]any{"command": "go test -count=1 ./..."},
+		"tool_response": map[string]any{"stdout": "ok  domain 0.4s", "stderr": "", "interrupted": false},
 	})
 }
 

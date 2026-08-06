@@ -28,6 +28,11 @@ except Exception:
     sys.exit(0)
 ti = d.get("tool_input") or {}
 print("session_id=%s" % shlex.quote(d.get("session_id", "")))
+# DOMAINSERV-218: agent_id está en el payload SOLO cuando el hook corre dentro de un subagente
+# ("use this to distinguish subagent hook calls from main-thread calls", doc de Claude Code). El
+# session_id NO sirve para esto porque se hereda: padre y subagente comparten el mismo. Ausente
+# = hilo principal, y ahí el nombre del marker queda igual que antes de este cambio.
+print("agent_id=%s" % shlex.quote(d.get("agent_id", "") or ""))
 print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
 # extract flow_run_id from orchestrate/phase_result response if present.
 # DOMAINSERV-108: Claude Code entrega tool_response como LISTA [{type,text}]
@@ -80,10 +85,24 @@ print("allowed_paths_json=%s" % shlex.quote(json.dumps([p for p in ap if isinsta
 state_dir="$HOME/.local/state/domain"
 mkdir -p "$state_dir" 2>/dev/null
 
+# DOMAINSERV-218: un marker por AGENTE, no por sesión. Sin esto, N subagentes de un mismo flow
+# comparten un único marker y por lo tanto una única allowlist: no hay forma de denegarle a uno
+# un path que le corresponde a otro, que es el criterio #2 del ticket.
+#
+# El sufijo se agrega SOLO cuando hay agent_id, así que para el hilo principal el nombre es
+# idéntico al de antes de este cambio. Eso es lo que hace el cambio seguro: el gate que autoriza
+# las ediciones del hilo principal no se toca.
+sufijo_agente=""
+[ -n "${agent_id:-}" ] && sufijo_agente="-${agent_id}"
+flow_marker_propio="$state_dir/flow-${session_id}${sufijo_agente}"
+
 # flow_cancel → delete marker, exit
 case "$tool_name" in
   *flow_cancel*)
-    rm -f "$state_dir/flow-$session_id" 2>/dev/null
+    # se borra el propio, y si es el hilo principal el propio ES el de la sesión. Un subagente
+    # que cancela NO le borra el marker al padre: antes de esto, cualquiera de los dos borraba el
+    # único que había.
+    rm -f "$flow_marker_propio" 2>/dev/null
     exit 0
     ;;
 esac
@@ -130,7 +149,7 @@ except Exception:
   fi
 fi
 
-marker="$state_dir/flow-$session_id"
+marker="$flow_marker_propio"
 # DOMAINSERV-98: el marker guarda el token HMAC — protegerlo de otros usuarios
 # del host (state_dir 700, marker 600) para que no sea legible ni replayable.
 mkdir -p "$state_dir" 2>/dev/null

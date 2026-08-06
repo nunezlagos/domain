@@ -76,6 +76,8 @@ except Exception:
     sys.exit(0)
 ti = d.get("tool_input") or {}
 print("session_id=%s" % shlex.quote(d.get("session_id", "")))
+# DOMAINSERV-218: presente solo dentro de un subagente. Ausente = hilo principal.
+print("agent_id=%s" % shlex.quote(d.get("agent_id", "") or ""))
 print("tool_name=%s" % shlex.quote(d.get("tool_name", "")))
 print("perm_mode=%s" % shlex.quote(d.get("permission_mode", "default")))
 print("tool_cmd=%s" % shlex.quote(ti.get("command", "") if isinstance(ti, dict) else ""))
@@ -94,6 +96,29 @@ if [ -n "$payload" ] && [ "${parse_failed:-}" = "yes" ]; then
   exit 0
 fi
 [ -n "$session_id" ] || exit 0
+
+# domain_flow_marker_de_este_agente — el marker de flow que autoriza a QUIEN está editando.
+#
+# DOMAINSERV-218: hasta acá había UN marker por sesión, así que N subagentes de un mismo flow
+# compartían una sola allowlist y era imposible denegarle a uno un path que le correspondía a
+# otro (criterio #2 del ticket). Un subagente tiene su propio marker porque agent_id SÍ lo
+# distingue —el session_id no, se hereda del padre—.
+#
+# EL FALLBACK AL MARKER DE SESIÓN NO ES PEREZA, es lo que mantiene el gate satisfacible: un
+# subagente al que el orquestador todavía no le emitió un token propio seguiría necesitando
+# editar bajo el flow que abrió el padre. Sin el fallback quedaría bloqueado, y un gate que
+# deniega lo legítimo empuja al bypass permanente — el modo de falla de DOMAINSERV-111/175/195.
+#
+# Para el hilo principal (agent_id ausente) devuelve exactamente el mismo path que antes de este
+# cambio: el camino que autoriza mis propias ediciones no se toca.
+domain_flow_marker_de_este_agente() {
+  base="$HOME/.local/state/domain/flow-$session_id"
+  if [ -n "${agent_id:-}" ] && [ -r "${base}-${agent_id}" ]; then
+    printf '%s' "${base}-${agent_id}"
+    return 0
+  fi
+  printf '%s' "$base"
+}
 
 # emit_decision <decision> <reason> — emite el permissionDecision y termina.
 emit_decision() {
@@ -1153,7 +1178,7 @@ if re.search(INTERPRETES, cmd):
     # tests (decisión explícita del usuario). El post-orchestrate escribe el
     # modo del flow como field3 del marker; si es "micro" el commit pasa sin
     # tests-ok. Cualquier otro modo mantiene el gate DOMAINSERV-74 intacto.
-    flow_marker="$HOME/.local/state/domain/flow-$session_id"
+    flow_marker=$(domain_flow_marker_de_este_agente)
     flow_mode=""
     [ -r "$flow_marker" ] && flow_mode=$(head -1 "$flow_marker" 2>/dev/null | cut -f3)
     marker="$HOME/.local/state/domain/tests-ok-$session_id"
@@ -1276,7 +1301,8 @@ fi
 #    agente (mismo uid) — y se cae al gate (ask en modo normal, deny en modos
 #    automáticos). Se removió todo trust-local degradado por TTL.
 
-marker="$HOME/.local/state/domain/flow-$session_id"
+# DOMAINSERV-218: el marker de ESTE agente. Para el hilo principal es el de siempre.
+marker=$(domain_flow_marker_de_este_agente)
 if [ -r "$marker" ] && [ -r "$LIB" ]; then
   . "$LIB"
   domain_resolve_env 2>/dev/null || true

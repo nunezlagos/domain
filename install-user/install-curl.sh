@@ -231,21 +231,20 @@ step "Compilando y ejecutando domain-install como $REAL_USER"
 sudo -u "$REAL_USER" bash -c "cd '$REPO_DIR/install-user' && go build -ldflags '-s -w' -o domain-install ."
 ok "binario compilado"
 
-# Instalar los lifecycle hooks en un path estable (fuera del repo,
-# para que no se pierdan si el repo se borra o se mueve).
-# REQ-54: SessionStart (bootstrap) + UserPromptSubmit (captura de prompts)
-# + Stop (cierre de turnos) + lib compartida de resolución de credenciales.
+# DOMAINSERV-239 modo 4: los lifecycle hooks los instala EL BINARIO, no este script.
+#
+# Antes se copiaban acá con `install -m 0755`. Si el binario también los escribe, los dos
+# escriben el mismo archivo y gana el último — hay que elegir un dueño, no sumar un segundo.
+# El dueño es el binario porque los lleva embebidos (go:embed hooks), y eso es lo que hace del
+# hash una verdad del binario y no del disco: así el doctor puede detectar un hook adulterado.
+#
+# El directorio se sigue creando acá, con el owner correcto, porque este script corre como root
+# y el binario después como $REAL_USER: si el binario tuviera que crearlo, quedaría con el uid
+# equivocado en un install que empieza con sudo.
 HOOKS_DIR="$REAL_HOME/.local/share/domain/hooks"
 mkdir -p "$HOOKS_DIR"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-session-start.sh" "$HOOKS_DIR/domain-session-start.sh"
-install -m 0644 "$REPO_DIR/install-user/hooks/domain-hooks-lib.sh" "$HOOKS_DIR/domain-hooks-lib.sh"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-user-prompt.sh" "$HOOKS_DIR/domain-user-prompt.sh"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-stop.sh" "$HOOKS_DIR/domain-stop.sh"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-post-orchestrate.sh" "$HOOKS_DIR/domain-post-orchestrate.sh"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-pre-edit.sh" "$HOOKS_DIR/domain-pre-edit.sh"
-install -m 0755 "$REPO_DIR/install-user/hooks/domain-post-test.sh" "$HOOKS_DIR/domain-post-test.sh"
 chown -R "$REAL_USER" "$HOOKS_DIR"
-ok "lifecycle hooks instalados: $HOOKS_DIR/ (session-start, user-prompt, stop)"
+ok "directorio de hooks preparado: $HOOKS_DIR/ (los instala el binario)"
 
 # Code graph RETIRADO (2026-07-07): el script domain-code-graph.sh ya no se
 # instala (auditoría: uso casi 100% automático, datos mayormente basura).

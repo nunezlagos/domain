@@ -306,6 +306,13 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	ok("skill: " + paths.GlobalSkillPath)
 	reportarAgentes(paths, res)
 
+	// DOMAINSERV-239 modo 1: los hooks se instalan ACÁ y no al final. runInstall tiene os.Exit(1)
+	// más abajo, y si esto corriera después de esos puntos, un fallo en cualquiera de ellos
+	// dejaría la máquina SIN hooks en un install limpio — o con los VIEJOS en un upgrade, donde
+	// hoy quedaban correctos porque los escribía install-curl.sh antes de invocar al binario.
+	step("Instalando lifecycle hooks")
+	instalarHooksLifecycle(paths.AgentHooksDir)
+
 	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
 	step("Escribiendo precedencia global de domain")
 	if err := installGlobalInstructions(p.Home(), Timestamp()); err != nil {

@@ -24,8 +24,17 @@ func checkHooks(home string) int {
 		hookPath := filepath.Join(hooksDir, spec.Script)
 		scriptOK := fileExists(hookPath)
 		regOK := hooks != nil && claudeHookRegistered(hooks, spec.Event, hookPath)
+		// DOMAINSERV-239: hasta acá el chequeo era solo fileExists, porque los hooks no estaban
+		// embebidos y no había con qué comparar. Ahora sí: un hook presente pero DIVERGENTE del
+		// binario se reporta, que es la diferencia entre "el archivo está" y "el archivo es el
+		// que debería ser".
 		if scriptOK && regOK {
-			ok(fmt.Sprintf("%s → %s (registrado + script presente)", spec.Event, spec.Script))
+			if divergeDelEmbebido(spec.Script, hookPath) {
+				warnL(fmt.Sprintf("%s → %s: registrado pero el contenido DIFIERE del que trae el binario",
+					spec.Event, spec.Script))
+				continue
+			}
+			ok(fmt.Sprintf("%s → %s (registrado + hash coincide)", spec.Event, spec.Script))
 			continue
 		}
 		if !scriptOK {

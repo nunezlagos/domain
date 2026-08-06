@@ -16,6 +16,14 @@ const agentsDir = "templates/agents"
 //go:embed templates/agents templates/agents-hooks
 var agentsFS embed.FS
 
+// DOMAINSERV-239: los lifecycle hooks viajan en el binario. Antes los instalaba install-curl.sh
+// y por eso el doctor solo podía comprobar que el archivo EXISTIERA — no tenía con qué comparar.
+// Embebidos, el hash pasa a ser una verdad del binario y no del disco, así que un hook adulterado
+// o divergente se detecta.
+//
+//go:embed hooks
+var hooksFS embed.FS
+
 //go:embed templates/skill-domain/SKILL.md
 var skillDomainMD []byte
 

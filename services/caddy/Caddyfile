@@ -63,6 +63,43 @@
 	}
 }
 
+# DOMAINSERV-204: las cabeceras se extraen a un snippet porque ahora hay DOS bloques que
+# sirven el panel —el de dominio con TLS y el catch-all :80— y unas cabeceras que solo
+# aplican en uno de los dos son peor que ninguna: el que quede sin ellas es justamente el
+# que un atacante va a usar.
+(cabeceras_de_seguridad) {
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# el dashboard no se embebe en ningun sitio: clickjacking innecesario
+		X-Frame-Options "DENY"
+		# no revelar la version del servidor a los escaneres
+		-Server
+	}
+}
+
+# DOMAINSERV-204: el panel sobre TLS. Hasta acá el único bloque que lo servía era el
+# catch-all `:80`, así que la cookie de sesión viajaba en claro y una red hostil podía
+# capturarla y reusarla tal cual — con la SECRET_KEY rotada ya no se puede forjar una sesión
+# offline, pero robar la que viaja sigue alcanzando.
+#
+# El bloque se activa poniendo ADMIN_DOMAIN en el .env; Caddy emite el cert por HTTP-01
+# automáticamente, igual que para quiensabe.cl. El default `admin.localhost` NO consume rate
+# limit de Let's Encrypt: para cualquier nombre `.localhost` Caddy usa su CA interna, así que
+# un ambiente sin dominio configurado levanta normal y sigue sirviendo por el `:80`.
+#
+# `{$VAR:default}` se substituye ANTES del parseo del Caddyfile (no es un placeholder de
+# runtime), que es lo que permite usarlo como dirección de sitio.
+#
+# VA ANTES del `:80` a propósito, por lo mismo que quiensabe.cl: el catch-all se lo comería.
+{$ADMIN_DOMAIN:admin.localhost} {
+	crowdsec
+	import accesslog
+	encode zstd gzip
+	import cabeceras_de_seguridad
+	reverse_proxy domain-admin:80
+}
+
 # quiensabe.cl - Astro SSR reverse proxy (qs-app:4323, red domain_internal).
 # Cert LE via HTTP-01 automatico (storage en /data/caddy, volume domain_caddy_data).
 # SNI ordering: este block va ANTES del catch-all :80 para que quiensabe.cl
@@ -152,12 +189,5 @@ quiensabe.cl, www.quiensabe.cl {
 
 	encode zstd gzip
 
-	header {
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		# el dashboard no se embebe en ningun sitio: clickjacking innecesario
-		X-Frame-Options "DENY"
-		# no revelar la version del servidor a los escaneres
-		-Server
-	}
+	import cabeceras_de_seguridad
 }

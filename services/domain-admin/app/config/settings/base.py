@@ -12,6 +12,8 @@ Usa el paquete `config.settings` (selecciona prod/test via DJANGO_ENV).
 import os
 from pathlib import Path
 
+from config.hardening import flag_de_cookie_segura
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -122,6 +124,26 @@ DATABASES = {
         },
     }
 }
+# DOMAINSERV-204 punto 3 — DECISION: las sesiones se QUEDAN en signed_cookies. Mover a
+# backend en BD se evaluo y se DESCARTO; queda por escrito acá porque el criterio de
+# aceptacion del ticket pide la decision registrada, no la implementacion.
+#
+# Lo que se gana con el backend db es poder revocar una sesion sin rotar la SECRET_KEY. Hoy
+# eso vale muy poco: la autenticacion del panel es `session["authenticated"] = True` sobre un
+# login single-user (config/views.py), asi que "cerrar sesiones ajenas" y "cerrar mi sesion"
+# son lo mismo, y rotar la clave —que ya es el procedimiento documentado— alcanza.
+#
+# Lo que cuesta es concreto y no es reversible barato: los modelos de este panel son
+# managed=False contra el Postgres de domain-mcp, asi que la tabla django_session no existe y
+# habria que decidir quien la crea. Si la crea Django, el schema del server pasa a tener una
+# tabla con dueño ambiguo y dos sistemas de migracion escribiendolo; si la crea una migracion
+# del server, el server carga con una tabla que solo usa el panel. Ninguna de las dos se paga
+# por una revocacion que con un usuario no se necesita.
+#
+# ESTO SE REEVALUA cuando el panel tenga usuarios reales y multiples: ahi la revocacion
+# granular pasa a tener valor y la decision cambia de signo. La superficie que SI se cerro en
+# este ticket es la otra mitad del riesgo — que la cookie viaje en claro y se pueda robar en
+# transito— via TLS + los flags Secure derivados de ADMIN_DOMAIN.
 SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 
 
@@ -147,14 +169,25 @@ MIDDLEWARE.insert(0, "whitenoise.middleware.WhiteNoiseMiddleware")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 
-SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
+# DOMAINSERV-204: el dominio del panel. Vacio o `admin.localhost` significa que todavia no
+# hay TLS en el origen y el panel se sirve por el bloque `:80` del Caddyfile.
+ADMIN_DOMAIN = os.environ.get("ADMIN_DOMAIN", "").strip()
+
+# los dos flags de abajo se DERIVAN de ADMIN_DOMAIN cuando el entorno no los fija: apagados
+# mientras el panel viaje por http, prendidos en cuanto haya dominio con TLS. Prenderlos
+# antes del TLS deja el panel inalcanzable, asi que el orden es del codigo y no del operador.
+SESSION_COOKIE_SECURE = flag_de_cookie_segura(
+    os.environ.get("SESSION_COOKIE_SECURE", ""), ADMIN_DOMAIN
+)
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 horas
 
-# Prenderlo sin TLS en el origen deja el panel inalcanzable: el browser no
-# devuelve una cookie Secure sobre http. Va junto al de sesion, no antes.
-CSRF_COOKIE_SECURE = os.environ.get("CSRF_COOKIE_SECURE", "0") == "1"
+# Va junto al de sesion, no antes, y por la misma razon: prenderlo sin TLS en el origen deja
+# el panel inalcanzable porque el browser no devuelve una cookie Secure sobre http.
+CSRF_COOKIE_SECURE = flag_de_cookie_segura(
+    os.environ.get("CSRF_COOKIE_SECURE", ""), ADMIN_DOMAIN
+)
 
 
 CSRF_TRUSTED_ORIGINS = _lista_separada_por_comas(

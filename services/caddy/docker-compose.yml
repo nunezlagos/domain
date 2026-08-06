@@ -24,6 +24,12 @@ services:
       # genera una sola vez en el .env — si se regenera, el bouncer queda
       # fallando ABIERTO en silencio.
       CROWDSEC_BOUNCER_API_KEY: ${CROWDSEC_BOUNCER_API_KEY:-}
+      # DOMAINSERV-204: dominio del panel. Vacío = el panel se sigue sirviendo por el
+      # bloque `:80` sin TLS, que es el estado actual. Al definirlo, Caddy emite el cert
+      # por HTTP-01 y Django prende SESSION_COOKIE_SECURE/CSRF_COOKIE_SECURE por default.
+      # El default `admin.localhost` usa la CA interna de Caddy: no consume rate limit de
+      # Let's Encrypt ni falla si no hay DNS. Es un valor de ambiente, no un secreto.
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

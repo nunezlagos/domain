@@ -1373,7 +1373,8 @@ try:
             body = json.loads(c["text"])
             if body.get("valid"):
                 ap = body.get("allowed_paths") or []
-                print("yes\t" + json.dumps(ap) + "\t" + (body.get("token") or ""))
+                otros = "1" if body.get("scopes_de_otros") else ""
+                print("yes\t" + json.dumps(ap) + "\t" + (body.get("token") or "") + "\t" + otros)
             break
 except Exception:
     pass
@@ -1394,9 +1395,26 @@ print((datetime.now(timezone.utc) + timedelta(seconds=1800)).isoformat())
 ' 2>/dev/null)
         printf '%s\t%s\n' "$token_renovado" "$nueva_exp" > "$marker" 2>/dev/null || true
       fi
+      scopes_de_otros=$(printf '%s' "$vinfo" | cut -f4)
       if [ "$valid" = "yes" ]; then
         # sin allowlist (flow normal) → sin restricción de path (backward-compat).
         if [ -z "$allowed_json" ] || [ "$allowed_json" = "[]" ] || [ "$allowed_json" = "null" ]; then
+          # DOMAINSERV-218 incremento 5. MEDIDO instrumentando el hook: acá salía el subagente
+          # que había caído al marker del PADRE. El token del padre no tiene allowed_paths, así
+          # que esta rama le daba vía libre a todos los paths y el aislamiento no existía por
+          # más scopes declarados que hubiera.
+          #
+          # Se acota a los flows donde el aislamiento está EN JUEGO: solo si OTRO agente tiene
+          # territorio reservado. En un flow normal —sin partición— esta rama sigue autorizando
+          # igual que siempre, que es lo que mantiene el gate satisfacible.
+          if [ -n "${agent_id:-}" ] && [ -n "$scopes_de_otros" ]; then
+            case "$perm_mode" in
+              default|plan) herencia_dec="ask" ;;
+              *)            herencia_dec="deny" ;;
+            esac
+            emit_decision "$herencia_dec" "domain gate SDD (DOMAINSERV-218): sos un subagente sin scope propio y estás usando el token del hilo principal, que no declara allowed_paths. En este flow OTRO agente sí reservó territorio, así que heredar una autorización sin restricción contradice esa partición. Pedí tu token con domain_flow_grant_token declarando tu allowed_paths."
+            exit 0
+          fi
           exit 0
         fi
         # sin file_path (ej. Bash-edit) no podemos scopear por path: el token es

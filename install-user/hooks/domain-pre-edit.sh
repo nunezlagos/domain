@@ -1230,6 +1230,12 @@ if faltan:
         if [ -n "$sin_cubrir" ]; then
           fresh=""
           gate_motivo_alcance="$sin_cubrir"
+          # DOMAINSERV-245: el deny tiene que decir las DOS mitades —qué se corrió y qué
+          # faltaba—. Con solo la segunda, quien recibe el deny no sabe si el problema es que
+          # corrió la suite equivocada o que no corrió nada, y son arreglos distintos. Importa
+          # especialmente con subagentes: el marker puede haberlo escrito otro, y su alcance es
+          # el único dato que dice si esa corrida sirve para este commit.
+          gate_alcance_corrido=$(cut -f4 "$marker" 2>/dev/null | head -1)
         fi
       fi
     fi
@@ -1250,7 +1256,7 @@ if faltan:
         *)            commit_dec="deny" ;;
       esac
       if [ -n "${gate_motivo_alcance:-}" ]; then
-        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-237): la corrida de tests NO cubrió estos archivos: ${gate_motivo_alcance}. Que el código no haya cambiado desde la corrida no prueba que la corrida lo haya evaluado. Corré la suite recursiva del módulo que los contiene, con -count=1 y sin -run: \`go test -count=1 ./...\` desde la raíz del módulo. Si de verdad no se pueden correr acá, autorizá UN commit con: echo 'tu razón' > $bypass"
+        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-237): la corrida de tests NO cubrió estos archivos: ${gate_motivo_alcance}. Lo que SÍ se corrió fue: ${gate_alcance_corrido:-(alcance no registrado)}. Que el código no haya cambiado desde la corrida no prueba que la corrida lo haya evaluado, y que el marker exista no prueba que su corrida cubra ESTE commit — puede haberlo escrito un subagente que corrió otra suite (DOMAINSERV-245). Corré la suite recursiva del módulo que los contiene, con -count=1 y sin -run: \`go test -count=1 ./...\` desde la raíz del módulo. Si de verdad no se pueden correr acá, autorizá UN commit con: echo 'tu razón' > $bypass"
       else
         emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corré la suite con \`go test -count=1 ./...\` (el -count=1 es obligatorio: sin él la corrida puede venir entera del cache y no evalúa nada). Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit con: echo 'tu razón' > $bypass"
       fi

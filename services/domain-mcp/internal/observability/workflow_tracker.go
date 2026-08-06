@@ -100,7 +100,20 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 	// inventarlo seria peor que no tenerlo. El COALESCE del ON CONFLICT ademas repara las
 	// filas que ya nacieron sin el.
 	startedAt := startedAtOrActivity(w.StartedAt, w.LastActivityAt)
-	_, err := s.Pool.Exec(ctx, `
+	_, err := s.Pool.Exec(ctx, sqlUpsertWorkflow,
+		w.ID, w.Name, string(w.Status), startedAt, w.EndedAt,
+		w.TotalToolCalls, w.TotalErrors, w.TotalDurationMS,
+		nullableUUIDPtr(w.ActorID), nullableUUIDPtr(w.APIKeyID), nullableUUIDPtr(w.ProjectID),
+		w.LastActivityAt,
+	)
+	return err
+}
+
+// sqlUpsertWorkflow se extrajo del cuerpo de UpsertWorkflow en DOMAINSERV-234: con el SQL
+// embebido la función llegaba a 71 líneas y size-lint —job OBLIGATORIO del CI que `go test` NO
+// corre— quedó en rojo desde el commit aecbb1ee sin que nadie lo notara. El SQL no cambió una
+// coma; solo salió a una constante nombrada, que además lo hace legible por su cuenta.
+const sqlUpsertWorkflow = `
 		INSERT INTO workflows (
 			id, name, status, started_at, ended_at,
 			total_tool_calls, total_errors, total_duration_ms,
@@ -148,14 +161,7 @@ func (s *PGWorkflowStore) UpsertWorkflow(ctx context.Context, w WorkflowRow) err
 			total_tool_calls = workflows.total_tool_calls + EXCLUDED.total_tool_calls,
 			total_errors = workflows.total_errors + EXCLUDED.total_errors,
 			total_duration_ms = workflows.total_duration_ms + EXCLUDED.total_duration_ms
-	`,
-		w.ID, w.Name, string(w.Status), startedAt, w.EndedAt,
-		w.TotalToolCalls, w.TotalErrors, w.TotalDurationMS,
-		nullableUUIDPtr(w.ActorID), nullableUUIDPtr(w.APIKeyID), nullableUUIDPtr(w.ProjectID),
-		w.LastActivityAt,
-	)
-	return err
-}
+	`
 
 // nullableStartedAt convierte un StartedAt en el bind param correcto para
 // el INSERT: nil (→ SQL NULL, que dispara el DEFAULT now()) si el valor

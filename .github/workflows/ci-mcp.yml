@@ -75,8 +75,18 @@ jobs:
         run: go build -o /tmp/db-conv-lint ./cmd/db-conventions-lint
       # 146 -> 278: el job nunca corrió en main y se acumularon 88 violaciones
       # en migraciones ya aplicadas, no corregibles retroactivamente (DOMAINSERV-198)
+      #
+      # 278 -> 282 (DOMAINSERV-234): el job estaba ROJO y nadie lo había notado. Las 5
+      # violaciones son de 000279 (header sin breaking/estimated_duration + un CREATE INDEX
+      # sin CONCURRENTLY) y 000282 (mismo header). Las dos están APLICADAS en prod, y la
+      # policy migracion-aplicada-no-se-edita prohíbe tocarlas: "un header inventado a
+      # posteriori documenta una intención que nadie tuvo; vale menos que su ausencia", y el
+      # CREATE INDEX sin CONCURRENTLY es irreparable porque el lock ya ocurrió.
+      #
+      # Subir el baseline es para lo que el baseline existe. Las migraciones 283 a 287 siguen
+      # verificadas: el guard mide lo nuevo, que es su contrato.
       - name: Lint migrations
-        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 278
+        run: /tmp/db-conv-lint --dir internal/migrate/migrations -baseline 282
 
   response-shape-lint:
     name: response-shape-lint

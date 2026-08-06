@@ -366,6 +366,48 @@ func toolFlowValidateToken() mcp.Tool {
 	)
 }
 
+// flowActivoParaGrant devuelve el mensaje de error si el flow no puede recibir un token, o ""
+// si está activo. Se extrajo de handleFlowGrantToken en DOMAINSERV-234: el guard de allowlists
+// la había llevado a 56 líneas y size-lint —que es job OBLIGATORIO del CI y NO lo corre
+// `go test`— quedó en rojo sin que nadie lo notara.
+//
+// Si el orquestador no está configurado devuelve "" a propósito: el fail-closed de este camino
+// lo hace la firma HMAC del token, no esta validación, y negar por falta de orquestador dejaría
+// el grant insatisfacible en un server sin él.
+func (h *orchestrateHandlers) flowActivoParaGrant(ctx context.Context, flowRunID string) string {
+	if h.orchestrator == nil {
+		return ""
+	}
+	fid, err := uuid.Parse(flowRunID)
+	if err != nil {
+		return "invalid flow_run_id"
+	}
+	status, err := h.orchestrator.GetFlowStatus(ctx, fid)
+	if err != nil {
+		return "flow_grant_token: " + err.Error()
+	}
+	if status.Status != "running" && status.Status != "pending" {
+		return "flow_grant_token: flow is not active (status=" + status.Status + ")"
+	}
+	return ""
+}
+
+// allowedPathsDelRequest extrae los globs descartando los vacíos y lo que no sea string. La
+// validación de su gramática es aparte, en flowsvc.ValidarAllowlist: acá solo se normaliza.
+func allowedPathsDelRequest(req mcp.CallToolRequest) []string {
+	raw, ok := req.GetArguments()["allowed_paths"].([]any)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, p := range raw {
+		if s, ok := p.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
@@ -380,29 +422,11 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		return mcp.NewToolResultError("flow_run_id and session_id are required"), nil
 	}
 
-	// validate flow is active
-	if h.orchestrator != nil {
-		fid, err := uuid.Parse(flowRunID)
-		if err != nil {
-			return mcp.NewToolResultError("invalid flow_run_id"), nil
-		}
-		status, err := h.orchestrator.GetFlowStatus(ctx, fid)
-		if err != nil {
-			return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
-		}
-		if status.Status != "running" && status.Status != "pending" {
-			return mcp.NewToolResultError("flow_grant_token: flow is not active (status=" + status.Status + ")"), nil
-		}
+	if msg := h.flowActivoParaGrant(ctx, flowRunID); msg != "" {
+		return mcp.NewToolResultError(msg), nil
 	}
 
-	var allowedPaths []string
-	if raw, ok := req.GetArguments()["allowed_paths"].([]any); ok {
-		for _, p := range raw {
-			if s, ok := p.(string); ok && s != "" {
-				allowedPaths = append(allowedPaths, s)
-			}
-		}
-	}
+	allowedPaths := allowedPathsDelRequest(req)
 
 	// El glob se valida al EMITIR y no al editar (DOMAINSERV-218). Un "**/*.go"
 	// tiene scope vacío: como allowlist de batch-mode no acota nada, y hace que

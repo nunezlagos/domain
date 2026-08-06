@@ -540,12 +540,15 @@ func toolSkillSearch() mcp.Tool {
 
 func toolSkillGet() mcp.Tool {
 	return mcp.NewTool("domain_skill_get",
-		mcp.WithDescription("Recupera detalle completo de un skill por id o slug."),
+		mcp.WithDescription("Recupera detalle completo de un skill por id o slug. Sin project_slug, el slug se resuelve SOLO entre las skills globales."),
 		mcp.WithString("id",
 			mcp.Description("UUID del skill (opcional si se pasa slug)"),
 		),
 		mcp.WithString("slug",
 			mcp.Description("Slug del skill (opcional si se pasa id)"),
+		),
+		mcp.WithString("project_slug",
+			mcp.Description("DOMAINSERV-248: scope para resolver el slug. Con él, una skill del proyecto gana sobre la global del mismo slug; sin él solo se resuelven globales, para que un slug de proyecto ajeno nunca se devuelva por accidente."),
 		),
 	)
 }

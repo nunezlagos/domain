@@ -75,7 +75,16 @@ func (d *Deps) handleSkillGet(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if slug == "" {
 		return mcp.NewToolResultError("id o slug requerido"), nil
 	}
-	sk, err := d.Skills.GetBySlug(ctx, orgID, slug)
+	// DOMAINSERV-248: con project_slug la skill del proyecto gana sobre la global del mismo slug;
+	// sin él se resuelven solo globales, así que un slug de proyecto ajeno no se devuelve por
+	// accidente. Un project_slug que no resuelve NO es error: degrada a búsqueda global.
+	scope := uuid.Nil
+	if projSlug, _ := args["project_slug"].(string); projSlug != "" && d.Projects != nil {
+		if proj, perr := d.Projects.GetBySlug(ctx, orgID, projSlug); perr == nil {
+			scope = proj.ID
+		}
+	}
+	sk, err := d.Skills.GetBySlugEnProyecto(ctx, scope, slug)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("get: %v", err)), nil
 	}

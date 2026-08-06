@@ -9,6 +9,26 @@ type ScopeVigente struct {
 	AllowedPaths []string
 }
 
+// HayScopesDeOtros dice si algún agente DISTINTO del consultante tiene territorio reservado en
+// el flow (DOMAINSERV-218, incremento 5).
+//
+// Existe por algo medido: un subagente sin marker propio cae al marker del PADRE, cuyo token no
+// tiene allowed_paths, y el gate toma la rama "sin allowlist → sin restricción". Así el fallback
+// le entrega la autorización amplia del hilo principal y el aislamiento se evapora por más
+// scopes que se hayan declarado.
+//
+// No se puede denegar a todo subagente sin token propio —el gate quedaría insatisfacible en cada
+// flow normal—, así que la restricción se acota a los flows donde el aislamiento está en juego:
+// si alguien declaró una partición, heredar la autorización amplia la contradice.
+func HayScopesDeOtros(consultante string, vigentes []ScopeVigente) bool {
+	for _, v := range vigentes {
+		if v.AgentID != consultante && len(v.AllowedPaths) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // SolapamientoConOtros es el caller que le faltaba a ValidarParticionDisjunta (DOMAINSERV-218,
 // criterio 3). La función existía desde el incremento 1 con sus tests, pero nadie la invocaba
 // porque un token aislado no puede responder "qué scopes hay vigentes en este flow": esa

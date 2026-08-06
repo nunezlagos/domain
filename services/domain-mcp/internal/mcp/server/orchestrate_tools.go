@@ -603,7 +603,30 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 	if renovado := h.renovarSiLeQuedaPoco(ctx, payload); renovado != "" {
 		res["token"] = renovado
 	}
+	// DOMAINSERV-218 incremento 5: un token SIN allowed_paths deja pasar cualquier path, y un
+	// subagente sin marker propio usa justamente ese —el del padre— por el fallback. Se le avisa
+	// al hook que hay una partición declarada por otros para que no herede la vía libre.
+	res["scopes_de_otros"] = hayParticionDeclarada(ctx, payload)
 	return toolResultJSON(res)
+}
+
+// hayParticionDeclarada dice si otro agente del flow tiene territorio reservado. Sin tx devuelve
+// false: no se puede afirmar que hay partición si no se pudo mirar, y afirmarlo de más frenaría
+// ediciones legítimas en un server sin base.
+func hayParticionDeclarada(ctx context.Context, payload *flowsvc.FlowTokenPayload) bool {
+	tx := txctx.TxFromContext(ctx)
+	if tx == nil {
+		return false
+	}
+	fid, err := uuid.Parse(payload.FlowRunID)
+	if err != nil || scopeDelFlowRun(ctx, tx, fid) != nil {
+		return false
+	}
+	vigentes, err := flowsvc.ScopesVigentesDelFlow(ctx, tx, fid)
+	if err != nil {
+		return false
+	}
+	return flowsvc.HayScopesDeOtros(payload.AgentID, vigentes)
 }
 
 // renovarSiLeQuedaPoco corre la expiración hacia adelante y devuelve un token nuevo, o "" si no
@@ -689,7 +712,10 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		// de proyecto solo vive dentro de una. Sin pool sigue emitiendo sin persistir, ver
 		// reservarTerritorio.
 		{Tool: toolFlowGrantToken(), Handler: conWorkflowDeLaCorrida(withOrgTxHandler(&deps, wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken)))},
-		{Tool: toolFlowValidateToken(), Handler: wrap.Wrap("domain_flow_validate_token", h.handleFlowValidateToken)},
+		// DOMAINSERV-218: validate necesita tx para la renovación deslizante y para saber si hay
+		// partición declarada. Es camino caliente, pero la escritura está acotada al umbral de
+		// renovación; sin tx el handler sigue funcionando y solo pierde esas dos cosas.
+		{Tool: toolFlowValidateToken(), Handler: withOrgTxHandler(&deps, wrap.Wrap("domain_flow_validate_token", h.handleFlowValidateToken))},
 	}
 }
 

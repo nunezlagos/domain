@@ -10,7 +10,7 @@ import (
 func checkHooks(home string) int {
 	step("Hooks (settings.json + scripts)")
 	settingsPath := claudeSettingsPath(home)
-	hooksDir := filepath.Join(home, ".local", "share", "domain", "hooks")
+	hooksDir := HooksDirDelSistema()
 
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
@@ -58,7 +58,7 @@ func checkHookMatchers(home string) int {
 		if spec.Matcher == "" {
 			continue
 		}
-		hooksDir := filepath.Join(home, ".local", "share", "domain", "hooks")
+		hooksDir := HooksDirDelSistema()
 		hookPath := filepath.Join(hooksDir, spec.Script)
 		expected := spec.Matcher
 

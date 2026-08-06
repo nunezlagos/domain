@@ -93,6 +93,18 @@ type Paths struct {
 	AgentsManifest string // ~/.local/share/domain/agents-manifest.json
 }
 
+// HooksDirDelSistema resuelve el directorio de los lifecycle hooks para los callers que no
+// tienen un Paths a mano (DOMAINSERV-239).
+//
+// Existe para que nadie vuelva a armar esa ruta con filepath.Join: en Windows la base es
+// %APPDATA% y no ~/.local/share, así que dos sitios que la construyan por su cuenta pueden
+// quedar apuntando a lugares distintos. Cuando eso pasa entre el registro de settings.json y el
+// chequeo del doctor, claudeHookGetMatcher no encuentra los hooks y el doctor reporta fallos
+// críticos en una instalación sana. Hay un guard de fuente que lo impide.
+func HooksDirDelSistema() string {
+	return DetectPlatform().Paths().AgentHooksDir
+}
+
 func (p Platform) Paths() Paths {
 	home := p.Home()
 	configDir := filepath.Join(home, ".config")

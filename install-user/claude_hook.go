@@ -58,7 +58,7 @@ func installClaudeSessionStartHook() {
 		warnL("no pude resolver HOME para instalar hooks: " + err.Error())
 		return
 	}
-	hooksDir := filepath.Join(home, ".local", "share", "domain", "hooks")
+	hooksDir := HooksDirDelSistema()
 	settingsPath := claudeSettingsPath(home)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {

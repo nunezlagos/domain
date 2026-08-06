@@ -166,7 +166,11 @@ normalized = re.sub(
 )
 pats = [
     r"git\s+reset\s+--hard",
-    r"git\s+clean\b",
+    # DOMAINSERV-247: -n y --dry-run son READ-ONLY. El patrón amplio los bloqueaba, y eso
+    # se midió en vivo: este mismo guard rechazó un comando de diagnóstico que solo
+    # mencionaba "git clean -n" dentro de un script. Es el mismo arreglo que DOMAINSERV-111
+    # hizo para stash, que había quedado a medias.
+    r"git\s+clean\s+(?!.*(?:-n\b|--dry-run\b))\S",
     # DOMAINSERV-111: list/show son READ-ONLY, no mutan el working tree
     r"git\s+stash\b(?!\s+(?:list|show)\b)",
     r"git\s+checkout\s+(--|\.)",

@@ -1,0 +1,7 @@
+status: proposed
+created: 2026-08-06
+archived: ~
+issue_id: ba4706da-ee75-4916-aaf6-5fba3b376c4e
+issue_slug: issue-56.5-fase-sdd-compliance-con-bloqueo-y-waive
+req_parent: REQ-56-compliance-marcos-normativos
+depends_on: issue-56.4-marcos-normativos-por-proyecto-con-cros

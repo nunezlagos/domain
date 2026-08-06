@@ -69,7 +69,12 @@ domain_tests_code_hash() {
   lista=$(cd "$raiz" 2>/dev/null && {
     git ls-files -co --exclude-standard -- ':(exclude)*.md'
     git ls-files -co --exclude-standard -- '*templates/*.md' '*testdata/*.md'
-  } | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done | sort)
+  # DOMAINSERV-247: LC_ALL=C NO es cosmético. `sort` de GNU con un locale como es_CL.UTF-8 ignora
+  # la puntuación al comparar, así que el ORDEN de la lista —y por lo tanto el hash— dependía del
+  # LANG de quien corriera el hook. MEDIDO: el mismo repo da 3f32e5d8... con LC_ALL=C y
+  # 08391a55... con es_CL.UTF-8. Si el post-test escribía el marker con un locale y el pre-edit
+  # comparaba con otro, el gate denegaba sin ninguna razón visible.
+  } | while IFS= read -r f; do [ -f "$f" ] && printf '%s\n' "$f"; done | LC_ALL=C sort)
   [ -n "$lista" ] || return 1
   # los nombres van junto a los hashes: sin eso un rename o un borrado pasaría inadvertido
   {

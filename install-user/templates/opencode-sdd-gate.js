@@ -21,6 +21,7 @@ import { homedir } from "os"
 import { join } from "path"
 import { readFileSync, writeFileSync, mkdirSync, statSync, unlinkSync } from "fs"
 import { execFileSync } from "child_process"
+import { createHash } from "crypto"
 
 const STATE_DIR = join(homedir(), ".local", "state", "domain")
 const EDIT_TOOLS = new Set(["edit", "write", "patch"])
@@ -84,15 +85,94 @@ function readMarker(sessionID) {
 // Comparar ese hash CONTRA el working tree actual todavía NO se hace acá: exige portar
 // domain_tests_code_hash, que hace dos pasadas de git ls-files. Hasta entonces esto cierra la
 // forja pero no detecta una edición posterior a la corrida.
+// codeHashDelRepo replica domain_tests_code_hash (domain-hooks-lib.sh:63) — DOMAINSERV-247.
+//
+// Se REPRODUCE EL PIPELINE, no se reinterpreta: los mismos comandos git, el mismo orden, el mismo
+// material de entrada al sha256. Un port "equivalente pero distinto" daría un hash que no coincide
+// con el que escribió el post-test de bash, y el gate rechazaría markers legítimos para siempre —
+// un falso negativo permanente empuja al bypass, que es peor que el defecto que se arregla. Hay un
+// test que compara esta salida contra la de la función bash y falla si divergen.
+//
+// Las DOS pasadas de git ls-files no son redundancia: git no admite re-inclusión después de un
+// :(exclude) en la misma llamada, así que los .md de templates y testdata se recuperan aparte.
+//
+// Los nombres van junto a los hashes: sin eso un rename o un borrado pasaría inadvertido.
+function codeHashDelRepo(raiz) {
+  try {
+    const git = (args) =>
+      execFileSync("git", args, { cwd: raiz, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
+
+    const crudo =
+      git(["ls-files", "-co", "--exclude-standard", "--", ":(exclude)*.md"]) +
+      git(["ls-files", "-co", "--exclude-standard", "--", "*templates/*.md", "*testdata/*.md"])
+
+    const { existsSync, statSync } = require("fs")
+    const { join } = require("path")
+    const lista = crudo
+      .split("\n")
+      .filter((f) => f !== "")
+      .filter((f) => {
+        // el `[ -f "$f" ]` del original: ls-files -o lista paths que pueden no ser archivos
+        try {
+          return statSync(join(raiz, f)).isFile()
+        } catch {
+          return false
+        }
+      })
+      .sort()
+    if (lista.length === 0) return ""
+
+    const hashes = execFileSync("git", ["hash-object", "--stdin-paths"], {
+      cwd: raiz,
+      input: lista.join("\n") + "\n",
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    })
+
+    // el material es exactamente lo que el `{ printf; printf | git hash-object }` de bash le
+    // pasa a sha256sum: la lista, y a continuación los hashes
+    const material = lista.join("\n") + "\n" + hashes
+    return createHash("sha256").update(material).digest("hex")
+  } catch {
+    return ""
+  }
+}
+
+// DOMAINSERV-247: ahora el hash almacenado se COMPARA contra el working tree. Antes solo se
+// exigía que existiera (DOMAINSERV-95, cerró la forja con `touch`), pero una edición POSTERIOR a
+// la corrida de tests dejaba el marker válido.
+//
+// Precedencia de DOMAINSERV-219: manda el code_hash (campo 3). El tree_hash (campo 2) solo se
+// acepta si el 3 no está, que es el caso de un marker escrito por la versión anterior del
+// post-test; comparar el 2 pudiendo comparar el 3 conservaría el falso verde que la 219 cerró,
+// porque `git diff HEAD` no lista untracked y un archivo nuevo sin `git add` no lo movería.
+//
+// Si el code_hash del repo no se puede calcular, NO se deniega: se cae a exigir que el hash
+// exista, o sea el comportamiento anterior a este cambio. Un gate que deniega porque git no
+// respondió empuja al bypass.
 function freshMarker(p, maxMinutes) {
   try {
     if (Date.now() - statSync(p).mtimeMs >= maxMinutes * 60000) return false
     const campos = readFileSync(p, "utf8").split("\n")[0].split("\t")
     const codeHash = (campos[2] || "").trim()
     const treeHash = (campos[1] || "").trim()
-    return (codeHash || treeHash) !== ""
+    if ((codeHash || treeHash) === "") return false
+
+    if (codeHash !== "") {
+      const actual = codeHashDelRepo(raizDelRepo())
+      return actual === "" ? true : actual === codeHash
+    }
+    return true
   } catch {
     return false
+  }
+}
+
+function raizDelRepo() {
+  try {
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
+  } catch {
+    return ""
   }
 }
 

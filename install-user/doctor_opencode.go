@@ -79,17 +79,32 @@ func checkOpencodeInstruction(paths Paths) int {
 // checkOpencodePlugin verifica que el plugin git-guard esté instalado en
 // <OpencodeDir>/plugins/domain-git-guard.js (DOMAINSERV-69b). Si OpenCode
 // no está presente, omite. Presente sin plugin → falla crítica.
+// DOMAINSERV-247: verificaba SOLO domain-git-guard.js, pero opencode_plugin.go instala DOS. El
+// que faltaba es domain-sdd-gate.js, o sea el que lleva el commit-gate y el gate SDD: podía
+// desaparecer del disco y el doctor daba todo verde.
+//
+// La lista se declara acá y un test la cruza contra lo que el instalador escribe, para que un
+// tercer plugin no repita el mismo olvido.
+var opencodePluginsRequeridos = []string{
+	"domain-git-guard.js",
+	"domain-sdd-gate.js",
+}
+
 func checkOpencodePlugin(paths Paths) int {
-	step("Plugin OpenCode (git-guard)")
+	step("Plugins OpenCode (git-guard + sdd-gate)")
 	if !dirExists(paths.OpencodeDir) {
 		info("opencode no detectado — chequeo omitido")
 		return 0
 	}
-	path := filepath.Join(paths.OpencodeDir, "plugins", "domain-git-guard.js")
-	if !fileExists(path) {
-		failL(path + ": falta el plugin git-guard")
-		return 1
+	fails := 0
+	for _, plugin := range opencodePluginsRequeridos {
+		path := filepath.Join(paths.OpencodeDir, "plugins", plugin)
+		if !fileExists(path) {
+			failL(path + ": falta el plugin")
+			fails++
+			continue
+		}
+		ok("plugin presente: " + plugin)
 	}
-	ok("plugin git-guard presente")
-	return 0
+	return fails
 }

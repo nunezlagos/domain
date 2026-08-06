@@ -31,10 +31,17 @@ func freshMarkerDeEsteRepo(t *testing.T, contenido string) bool {
 	if err != nil {
 		t.Fatalf("no se pudo leer el plugin: %v", err)
 	}
-	re := regexp.MustCompile(`(?s)function freshMarker\(.*?\n\}`)
-	fn := re.FindString(string(src))
-	if fn == "" {
-		t.Fatal("no se encontró freshMarker en el plugin")
+	// DOMAINSERV-247: freshMarker dejó de ser autocontenida — ahora llama a codeHashDelRepo y a
+	// raizDelRepo para comparar el hash contra el working tree. Extraer solo freshMarker las
+	// dejaba undefined, la excepción caía al catch y TODO devolvía false: un falso rojo que
+	// parecía un fallo del gate.
+	var fn string
+	for _, nombre := range []string{"freshMarker", "codeHashDelRepo", "raizDelRepo"} {
+		bloque := regexp.MustCompile(`(?s)function ` + nombre + `\(.*?\n\}`).FindString(string(src))
+		if bloque == "" {
+			t.Fatalf("no se encontró %s en el plugin", nombre)
+		}
+		fn += bloque + "\n"
 	}
 
 	marker := filepath.Join(t.TempDir(), "tests-ok-sesion")
@@ -42,7 +49,9 @@ func freshMarkerDeEsteRepo(t *testing.T, contenido string) bool {
 		t.Fatal(err)
 	}
 
-	script := "const {statSync, readFileSync} = require('fs');\n" + fn +
+	script := "const {statSync, readFileSync} = require('fs');\n" +
+		"const {execFileSync} = require('child_process');\n" +
+		"const {createHash} = require('crypto');\n" + fn +
 		"\nprocess.stdout.write(String(freshMarker(process.argv[1], 30)))"
 	out, err := exec.Command("node", "-e", script, marker).CombinedOutput()
 	if err != nil {
@@ -75,12 +84,37 @@ func TestOpenCodeFreshMarker_HashesVacios_NoEsFresco(t *testing.T) {
 	}
 }
 
-// El camino legítimo NO se rompe: un marker real con code_hash sigue siendo fresco.
-func TestOpenCodeFreshMarker_MarkerRealConCodeHash_EsFresco(t *testing.T) {
-	real := "2026-08-06T12:00:00-04:00\tabc123treehash\tdef456codehash\tinstall-user\tgo\tmain\n"
-	if !freshMarkerDeEsteRepo(t, real) {
-		t.Error("un marker legítimo dejó de ser fresco: el commit-gate quedaría insatisfacible en OpenCode " +
-			"y eso empuja al bypass permanente (DOMAINSERV-111/175/195)")
+// El camino legítimo NO se rompe: un marker con el code_hash REAL del repo sigue siendo fresco.
+//
+// Este test usaba un hash ficticio ("def456codehash") cuando freshMarker solo exigía que el campo
+// existiera. DOMAINSERV-247 lo cambió: ahora se COMPARA contra el working tree, así que un hash
+// inventado tiene que ser rechazado — y por eso el test pasa a calcular el hash de verdad. No es
+// aflojar la aserción: es que el contrato cambió y el caso "legítimo" ahora significa otra cosa.
+func TestOpenCodeFreshMarker_MarkerConElCodeHashRealDelRepo_EsFresco(t *testing.T) {
+	repo, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		t.Skip("no estamos en un repo git")
+	}
+	real := codeHashJS(t, strings.TrimSpace(string(repo)))
+	if real == "" {
+		t.Skip("no se pudo calcular el code_hash del repo")
+	}
+
+	marker := "2026-08-06T12:00:00-04:00\tabc123treehash\t" + real + "\tinstall-user\tgo\tmain\n"
+	if !freshMarkerDeEsteRepo(t, marker) {
+		t.Error("un marker con el code_hash real fue rechazado: el commit-gate quedaría " +
+			"insatisfacible en OpenCode y eso empuja al bypass permanente (DOMAINSERV-111/175/195)")
+	}
+}
+
+// Y el que da sentido al cambio: un code_hash que NO corresponde al estado actual se rechaza.
+// Es el defecto 1 del ticket — una edición posterior a la corrida invalida el marker.
+func TestOpenCodeFreshMarker_CodeHashQueNoCorresponde_NoEsFresco(t *testing.T) {
+	viejo := "2026-08-06T12:00:00-04:00\tabc123treehash\t" +
+		"0000000000000000000000000000000000000000000000000000000000000000\tinstall-user\tgo\tmain\n"
+	if freshMarkerDeEsteRepo(t, viejo) {
+		t.Error("un code_hash que no corresponde al working tree pasó: una edición posterior a la " +
+			"corrida de tests dejaría el marker válido, que es el defecto 1 de DOMAINSERV-247")
 	}
 }
 

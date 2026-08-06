@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sync"
 	"time"
+
+	"nunezlagos/domain/internal/service/webhook"
 )
 
 // WebhookDispatcher gestiona el lifecycle de las goroutines que ejecutan
@@ -90,6 +92,30 @@ func NewWebhookDispatcher(cfg WebhookDispatcherConfig) *WebhookDispatcher {
 	go d.worker()
 
 	return d
+}
+
+// StartWebhookDispatcher construye el dispatcher y lo deja cableado en la API. Devuelve la
+// función de cierre, que el caller debe diferir para drenar los jobs en vuelo.
+//
+// DOMAINSERV-240: NewWebhookDispatcher existía pero su único llamador era su propio test,
+// así que API.WebhookDispatcher quedaba siempre en nil y toda entrega caía a la rama de
+// `go runWebhookTarget(...)`: una goroutine por request, sin cota ni backpressure. Con el
+// dispatcher cableado la concurrencia queda acotada, la cola llena responde 503 en vez de
+// acumular goroutines, y cada job corre con su propio contexto y timeout.
+//
+// El cableado vive en este package y no en cmd/ porque webhookJob es privado: exportarlo
+// solo para armar el closure filtraría un tipo interno al wireup.
+func (a *API) StartWebhookDispatcher(cfg WebhookDispatcherConfig) func(context.Context) error {
+	cfg.Dispatch = func(ctx context.Context, job webhookJob) {
+		hook, ok := job.hook.(*webhook.Webhook)
+		if !ok {
+			return
+		}
+		a.runWebhookTarget(ctx, hook, job.body, job.inputs, job.headers, job.remote)
+	}
+	d := NewWebhookDispatcher(cfg)
+	a.WebhookDispatcher = d
+	return d.Shutdown
 }
 
 // Enqueue intenta agregar un job a la cola. Retorna false si la cola

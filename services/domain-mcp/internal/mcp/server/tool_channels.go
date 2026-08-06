@@ -236,6 +236,12 @@ var toolChannel = map[string]ToolChannel{
 	// workflow_tools.go pero registerWorkflowTools NO tiene call-sites (deuda
 	// issue-12.7: tools sin wire). Cuando se registren, clasificarlas acá —
 	// TestAllToolsHaveChannel lo va a exigir.
+	"domain_webhook_create":      ChannelUserIntent,
+	"domain_webhook_deliveries":  ChannelUserIntent,
+	"domain_webhook_delete":      ChannelUserIntent,
+	"domain_webhook_list":        ChannelUserIntent,
+	"domain_webhook_set_enabled": ChannelUserIntent,
+
 	"domain_workflow_recent":  ChannelUserIntent,
 	"domain_workflow_slowest": ChannelUserIntent,
 	"domain_workflow_trace":   ChannelUserIntent,

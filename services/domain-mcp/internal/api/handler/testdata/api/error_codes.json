@@ -50,7 +50,6 @@
   "run_failed",
   "scan_failed",
   "seed_managed",
-  "signature_invalid",
   "skill_not_found",
   "stop_failed",
   "suggestions_disabled",

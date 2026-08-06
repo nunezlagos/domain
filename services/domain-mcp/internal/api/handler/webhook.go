@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,8 +35,7 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 
 	hook, secret, err := a.WebhookService.ResolveBySlug(r.Context(), slug)
 	if errors.Is(err, webhook.ErrNotFound) {
-
-		writeError(w, http.StatusNotFound, "not_found", "")
+		responderNoAutorizado(w)
 		return
 	}
 	if err != nil {
@@ -50,17 +50,29 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !verifyWebhookSignature(hook.SourceType, secret, body, r) {
-		_ = a.WebhookService.RecordDelivery(r.Context(), hook.ID, body,
+		// DOMAINSERV-240: la entrega se registra SIN el payload. Antes se persistían
+		// hasta 5MB antes de autenticar, así que un endpoint público sin auth era una
+		// amplificación de escritura: cualquiera llenaba la tabla mandando basura con
+		// firma inválida. La fila se conserva porque saber que llegó algo y no cuadró es
+		// justo lo que se diagnostica; el cuerpo no aporta a eso.
+		_ = a.WebhookService.RecordDelivery(r.Context(), hook.ID, nil,
 			collectHeaders(r), r.RemoteAddr, "signature_invalid", nil, "HMAC mismatch")
-		writeError(w, http.StatusUnauthorized, "signature_invalid", "")
+		responderNoAutorizado(w)
 		return
 	}
 
 	inputs := buildInputs(body, hook.InputsMapping)
 
 	if a.WebhookDispatcher == nil {
-
-		go a.runWebhookTarget(r.Context(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
+		// context.WithoutCancel y no r.Context(): el contexto del request muere al
+		// responder, así que la goroutine arrancaba y se cancelaba sola. Conserva los
+		// valores del ctx (request_id del logging estructurado) sin heredar la
+		// cancelación, y el timeout propio evita que quede colgada para siempre
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
+		go func() {
+			defer cancel()
+			a.runWebhookTarget(ctx, hook, body, inputs, collectHeaders(r), r.RemoteAddr)
+		}()
 	} else {
 		job := webhookJob{
 			hookID:    hook.ID.String(),
@@ -83,20 +95,30 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// responderNoAutorizado devuelve la MISMA respuesta para un slug que no existe y para una
+// firma que no cuadra (DOMAINSERV-240). La diferencia entre 404 y 401 era un oráculo de
+// enumeración: bastaba mirar el código para saber qué webhooks tiene la instancia, sin
+// credencial alguna, en un endpoint público. Un webhook deshabilitado cae acá también,
+// porque ResolveBySlug devuelve ErrNotFound cuando enabled=false.
+func responderNoAutorizado(w http.ResponseWriter) {
+	writeError(w, http.StatusUnauthorized, "unauthorized", "")
+}
+
 func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Request) bool {
 	switch sourceType {
 	case "github":
 		return webhook.VerifyHMAC(secret, body, r.Header.Get("X-Hub-Signature-256"))
 	case "gitlab":
-
+		// comparación en tiempo constante: == sobre strings corta en el primer byte
+		// distinto y filtra el prefijo correcto del secreto por diferencia de tiempo
 		token := r.Header.Get("X-Gitlab-Token")
-		return token != "" && token == string(secret)
-	case "bitbucket":
-
-		return true
+		return token != "" && hmac.Equal([]byte(token), secret)
 	case "generic":
 		return webhook.VerifyHMAC(secret, body, r.Header.Get("X-Domain-Signature"))
 	}
+	// DOMAINSERV-240: bitbucket devolvía true sin verificar NADA, así que aceptaba
+	// cualquier payload de cualquiera. El default es rechazar: un source_type sin
+	// verificación implementada no se atiende, y el alta por MCP tampoco lo acepta
 	return false
 }
 

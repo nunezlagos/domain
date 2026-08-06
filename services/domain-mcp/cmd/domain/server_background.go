@@ -69,6 +69,16 @@ func startBackground(
 
 		runners.SchedCancel()
 
+		// las entregas de webhook ya respondidas con 202 se drenan antes de morir: sin
+		// esto un SIGTERM las descarta en silencio (DOMAINSERV-240)
+		if s.WebhookShutdown != nil {
+			whCtx, whCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := s.WebhookShutdown(whCtx); err != nil {
+				logger.Warn("webhook dispatcher no drenó a tiempo", slog.Any("err", err))
+			}
+			whCancel()
+		}
+
 		duration := time.Since(shutdownStart).Seconds()
 		logger.Info("graceful shutdown complete",
 			slog.Float64("duration_s", duration),

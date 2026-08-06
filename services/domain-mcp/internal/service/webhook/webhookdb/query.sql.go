@@ -49,7 +49,7 @@ func (q *Queries) GetDelivery(ctx context.Context, id uuid.UUID) (GetDeliveryRow
 }
 
 const getWebhookByID = `-- name: GetWebhookByID :one
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE id = $1 AND deleted_at IS NULL
@@ -58,6 +58,7 @@ FROM webhooks WHERE id = $1 AND deleted_at IS NULL
 type GetWebhookByIDRow struct {
 	ID              uuid.UUID          `json:"id"`
 	CreatedBy       *uuid.UUID         `json:"created_by"`
+	ProjectID       *uuid.UUID         `json:"project_id"`
 	Slug            string             `json:"slug"`
 	Name            string             `json:"name"`
 	SecretEncrypted []byte             `json:"secret_encrypted"`
@@ -78,6 +79,7 @@ func (q *Queries) GetWebhookByID(ctx context.Context, id uuid.UUID) (GetWebhookB
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedBy,
+		&i.ProjectID,
 		&i.Slug,
 		&i.Name,
 		&i.SecretEncrypted,
@@ -95,7 +97,7 @@ func (q *Queries) GetWebhookByID(ctx context.Context, id uuid.UUID) (GetWebhookB
 }
 
 const getWebhookBySlug = `-- name: GetWebhookBySlug :one
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE slug = $1 AND deleted_at IS NULL
@@ -104,6 +106,7 @@ FROM webhooks WHERE slug = $1 AND deleted_at IS NULL
 type GetWebhookBySlugRow struct {
 	ID              uuid.UUID          `json:"id"`
 	CreatedBy       *uuid.UUID         `json:"created_by"`
+	ProjectID       *uuid.UUID         `json:"project_id"`
 	Slug            string             `json:"slug"`
 	Name            string             `json:"name"`
 	SecretEncrypted []byte             `json:"secret_encrypted"`
@@ -124,6 +127,7 @@ func (q *Queries) GetWebhookBySlug(ctx context.Context, slug string) (GetWebhook
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedBy,
+		&i.ProjectID,
 		&i.Slug,
 		&i.Name,
 		&i.SecretEncrypted,
@@ -171,16 +175,17 @@ func (q *Queries) InsertDelivery(ctx context.Context, arg InsertDeliveryParams) 
 
 const insertWebhook = `-- name: InsertWebhook :one
 INSERT INTO webhooks
-    (created_by, slug, name, secret_encrypted, source_type,
+    (created_by, project_id, slug, name, secret_encrypted, source_type,
      target_type, target_id, inputs_mapping)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, created_by, slug, name, secret_encrypted, source_type,
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, created_by, project_id, slug, name, secret_encrypted, source_type,
           target_type, target_id, inputs_mapping, enabled,
           last_delivery_at, created_at, updated_at, deleted_at
 `
 
 type InsertWebhookParams struct {
 	CreatedBy       *uuid.UUID `json:"created_by"`
+	ProjectID       *uuid.UUID `json:"project_id"`
 	Slug            string     `json:"slug"`
 	Name            string     `json:"name"`
 	SecretEncrypted []byte     `json:"secret_encrypted"`
@@ -193,6 +198,7 @@ type InsertWebhookParams struct {
 type InsertWebhookRow struct {
 	ID              uuid.UUID          `json:"id"`
 	CreatedBy       *uuid.UUID         `json:"created_by"`
+	ProjectID       *uuid.UUID         `json:"project_id"`
 	Slug            string             `json:"slug"`
 	Name            string             `json:"name"`
 	SecretEncrypted []byte             `json:"secret_encrypted"`
@@ -210,6 +216,7 @@ type InsertWebhookRow struct {
 func (q *Queries) InsertWebhook(ctx context.Context, arg InsertWebhookParams) (InsertWebhookRow, error) {
 	row := q.db.QueryRow(ctx, insertWebhook,
 		arg.CreatedBy,
+		arg.ProjectID,
 		arg.Slug,
 		arg.Name,
 		arg.SecretEncrypted,
@@ -222,6 +229,7 @@ func (q *Queries) InsertWebhook(ctx context.Context, arg InsertWebhookParams) (I
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedBy,
+		&i.ProjectID,
 		&i.Slug,
 		&i.Name,
 		&i.SecretEncrypted,
@@ -293,7 +301,7 @@ func (q *Queries) ListDeliveries(ctx context.Context, arg ListDeliveriesParams) 
 }
 
 const listWebhooks = `-- name: ListWebhooks :many
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE deleted_at IS NULL ORDER BY created_at DESC
@@ -302,6 +310,7 @@ FROM webhooks WHERE deleted_at IS NULL ORDER BY created_at DESC
 type ListWebhooksRow struct {
 	ID              uuid.UUID          `json:"id"`
 	CreatedBy       *uuid.UUID         `json:"created_by"`
+	ProjectID       *uuid.UUID         `json:"project_id"`
 	Slug            string             `json:"slug"`
 	Name            string             `json:"name"`
 	SecretEncrypted []byte             `json:"secret_encrypted"`
@@ -328,6 +337,7 @@ func (q *Queries) ListWebhooks(ctx context.Context) ([]ListWebhooksRow, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedBy,
+			&i.ProjectID,
 			&i.Slug,
 			&i.Name,
 			&i.SecretEncrypted,

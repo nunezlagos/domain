@@ -390,7 +390,11 @@ _SOURCES_CONFIG: list[dict] = [
     },
     {
         "table": "webhook",
-        "url_prefix": "/webhooks/detalle?id=",
+        # sin link a proposito (DOMAINSERV-240): no existe ninguna ruta /webhooks/ en
+        # config/urls.py, asi que el prefijo anterior publicaba una fuente cuyo enlace
+        # daba 404. Los webhooks inbound se administran por las tools MCP
+        # domain_webhook_*, no por pantalla; cuando exista la pantalla, el prefijo vuelve.
+        "url_prefix": "",
         "sql": """
             SELECT CAST(id AS TEXT) AS id, slug, name, description, kind
             FROM webhooks
@@ -624,7 +628,7 @@ class RetrievalService:
             background_sources.append(Source(
                 table=table, id=rid, title=title,
                 snippet=text[:200], score=0.0,
-                url=f"{_url_prefix_for(table)}{rid}" if rid else "",
+                url=_source_url(table, rid),
             ))
 
         if not background_chunks and not primary.chunks:
@@ -777,3 +781,15 @@ def _url_prefix_for(table: str) -> str:
         if cfg["table"] == table:
             return cfg["url_prefix"]
     return "/"
+
+
+def _source_url(table: str, rid: str) -> str:
+    """URL de la fuente, o cadena vacia si esa tabla no tiene pantalla.
+
+    Un prefijo vacio no se concatena con el id: daria "/<uuid>", que es un link roto
+    distinto del que se queria evitar. Vacio significa "sin pantalla" (DOMAINSERV-240).
+    """
+    prefix = _url_prefix_for(table)
+    if not rid or not prefix:
+        return ""
+    return f"{prefix}{rid}"

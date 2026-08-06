@@ -34,6 +34,7 @@ import (
 	clientsvc "nunezlagos/domain/internal/service/client"
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
 	cronsvc "nunezlagos/domain/internal/service/cron"
+	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	intakesvc "nunezlagos/domain/internal/service/intake"
@@ -72,6 +73,7 @@ type Deps struct {
 	Agents           *agentsvc.Service
 	AgentRunner      *agentrunner.Runner
 	Crons            *cronsvc.Service           // issue-12.3 domain_cron_list
+	InboundWebhooks  *webhooksvc.Service        // DOMAINSERV-240 domain_webhook_* — el camino de alta que la feature no tenía
 	Clients          *clientsvc.Service         // clients/mandantes — consultoras gestionan proyectos por cliente
 	CapturedPrompts  *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
 	ProjectRepos     *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
@@ -137,6 +139,7 @@ var toolGroups = []toolRegistrar{
 	registerOpenspecTools,
 	registerWorkflowTraceTools,
 	registerErrorReportingTools,
+	registerWebhookTools,
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).

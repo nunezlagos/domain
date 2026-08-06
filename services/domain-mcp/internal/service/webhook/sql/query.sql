@@ -1,26 +1,26 @@
 -- name: InsertWebhook :one
 INSERT INTO webhooks
-    (created_by, slug, name, secret_encrypted, source_type,
+    (created_by, project_id, slug, name, secret_encrypted, source_type,
      target_type, target_id, inputs_mapping)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, created_by, slug, name, secret_encrypted, source_type,
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, created_by, project_id, slug, name, secret_encrypted, source_type,
           target_type, target_id, inputs_mapping, enabled,
           last_delivery_at, created_at, updated_at, deleted_at;
 
 -- name: GetWebhookBySlug :one
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE slug = $1 AND deleted_at IS NULL;
 
 -- name: GetWebhookByID :one
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListWebhooks :many
-SELECT id, created_by, slug, name, secret_encrypted, source_type,
+SELECT id, created_by, project_id, slug, name, secret_encrypted, source_type,
        target_type, target_id, inputs_mapping, enabled,
        last_delivery_at, created_at, updated_at, deleted_at
 FROM webhooks WHERE deleted_at IS NULL ORDER BY created_at DESC;

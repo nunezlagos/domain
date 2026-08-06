@@ -165,6 +165,14 @@ func buildRouter(
 		},
 	}
 
+	// DOMAINSERV-240: sin esto API.WebhookDispatcher quedaba en nil y cada entrega
+	// arrancaba una goroutine suelta por request, sin cota ni backpressure.
+	s.WebhookShutdown = api.StartWebhookDispatcher(handler.WebhookDispatcherConfig{
+		QueueSize:  256,
+		JobTimeout: 30 * time.Second,
+		Logger:     logger,
+	})
+
 	mux.Handle("/api/", corsMW.Wrap(
 		versionCatalog.Middleware(
 			requestLogMW(
@@ -188,6 +196,7 @@ func buildRouter(
 			Agents:           s.AgentService,
 			AgentRunner:      s.AgentRunnerInst,
 			Crons:            s.CronService,
+			InboundWebhooks:  s.InboundWebhookService,
 			Clients:          s.ClientService,
 			CapturedPrompts:  s.CapturedPromptService,
 			ProjectRepos:     s.ProjectRepoService,

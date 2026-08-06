@@ -92,6 +92,10 @@ import (
 
 // serverServices agrupa todos los servicios construidos por buildServices.
 type serverServices struct {
+	// WebhookShutdown drena los jobs de webhook en vuelo al cerrar. Lo setea buildRouter
+	// al cablear el dispatcher (DOMAINSERV-240); sin llamarlo, un SIGTERM descarta las
+	// entregas ya aceptadas con 202.
+	WebhookShutdown        func(context.Context) error
 	Recorder               *audit.PGRecorder
 	ClientService          *clientsvc.Service
 	CapturedPromptService  *capturedpromptsvc.Service
@@ -255,7 +259,12 @@ func buildServices(
 
 	s.OutboundWebhookService = &outboundwebhook.Service{Pool: pools.App, Cipher: s.MasterCipher}
 	if s.MasterCipher != nil {
-		s.InboundWebhookService = &webhooksvc.Service{Pool: pools.App, Audit: s.Recorder, Crypto: s.MasterCipher}
+		// PoolPublic = pools.Auth (app_admin, BYPASSRLS) solo para el camino de recepción:
+		// /receive es público y conoce únicamente el slug, así que no tiene proyecto con el
+		// que satisfacer el RLS de la 000288 (DOMAINSERV-240)
+		s.InboundWebhookService = &webhooksvc.Service{
+			Pool: pools.App, PoolPublic: pools.Auth, Audit: s.Recorder, Crypto: s.MasterCipher,
+		}
 	}
 	s.OutboundDispatcher = &outboundwebhook.Dispatcher{
 		Pool: pools.App, Svc: s.OutboundWebhookService,

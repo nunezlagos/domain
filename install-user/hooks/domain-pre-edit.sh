@@ -1327,7 +1327,26 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       # DOMAINSERV-108: flow_status devuelve JSON indentado ("status": "pending"
       # con espacio tras el colon). El patrón sin espacio nunca matcheaba →
       # rama legacy muerta. Tolerar whitespace opcional tras el colon.
-      echo "$resp" | grep -qE '"status":[[:space:]]*"(running|pending)"' && exit 0
+      #
+      # DOMAINSERV-218 incremento 4: el marker v1 legacy NO PUEDE LLEVAR SCOPE —es
+      # "<timestamp>\t<flow_run_id>\t<mode>"— así que autorizar por esta rama es autorizar SIN
+      # restricción de path. Para el hilo principal eso es el comportamiento histórico y se
+      # conserva. Para un SUBAGENTE es un agujero: MEDIDO el 2026-08-06, un subagente scopeado a
+      # openspec/** escribió en .github/ porque su marker había degradado a legacy.
+      #
+      # Un subagente cae al gate en vez de recibir vía libre. NO es un deny: sigue pudiendo pedir
+      # autorización, y el hilo principal no se toca, así que el gate no se vuelve insatisfacible.
+      if echo "$resp" | grep -qE '"status":[[:space:]]*"(running|pending)"'; then
+        if [ -z "${agent_id:-}" ]; then
+          exit 0
+        fi
+        case "$perm_mode" in
+          default|plan) legacy_dec="ask" ;;
+          *)            legacy_dec="deny" ;;
+        esac
+        emit_decision "$legacy_dec" "domain gate SDD (DOMAINSERV-218): sos un subagente y tu marker de flow es v1 legacy, que no puede declarar allowed_paths. Autorizarte por esta vía te daría permiso de editar CUALQUIER path, que es justo lo que el aislamiento por agente evita. Pedí tu token con domain_flow_grant_token declarando tu allowed_paths, o dejá que la edición la haga el hilo principal."
+        exit 0
+      fi
       # no confirmado / server unreachable → fail-closed → gate
     elif [ -n "$field1" ]; then
       # v2: field1 = token HMAC → validar firma + flow activo server-side

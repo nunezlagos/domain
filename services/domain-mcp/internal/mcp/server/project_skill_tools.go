@@ -106,10 +106,24 @@ func (h *projectSkillHandlers) handleProjectSkillRegister(ctx context.Context, r
 
 	var id uuid.UUID
 	err := h.q(ctx).QueryRow(ctx,
+		// DOMAINSERV-223: sin el ON CONFLICT, cada re-registro con el mismo slug creaba una fila
+		// nueva — así entraron los dos 'correr-migraciones-manuales' que había en prod. El árbitro
+		// es el índice parcial de la 000290, y por eso la cláusula repite su predicado: un índice
+		// parcial solo sirve como árbitro si se lo reproduce textualmente.
+		//
+		// DO UPDATE y no DO NOTHING: quien re-registra una skill está actualizándola, y con
+		// DO NOTHING se iría creyendo que su cambio tomó efecto.
 		`INSERT INTO skills
 		   (project_id, slug, name, description,
 		    skill_type, content, input_schema, output_schema, root_path)
 		 VALUES ($1,$2,$3,NULLIF($4,''),$5,NULLIF($6,''),'{}','{}',NULLIF($7,''))
+		 ON CONFLICT (project_id, slug) WHERE project_id IS NOT NULL AND deleted_at IS NULL
+		 DO UPDATE SET name = EXCLUDED.name,
+		               description = EXCLUDED.description,
+		               skill_type = EXCLUDED.skill_type,
+		               content = EXCLUDED.content,
+		               root_path = EXCLUDED.root_path,
+		               updated_at = now()
 		 RETURNING id`,
 		proj.ID, slug, name, desc, skillType, content, rootPath,
 	).Scan(&id)

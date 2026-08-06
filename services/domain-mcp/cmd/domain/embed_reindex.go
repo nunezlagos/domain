@@ -94,13 +94,47 @@ func mensajeDeFalloConcurrente(index string) string {
 		index, index, index)
 }
 
+// dsnCandidatosMantenimiento es el orden de resolución del DSN para los comandos de
+// MANTENIMIENTO de la instancia (reindex y backfill de embeddings). El admin/auth va PRIMERO
+// y eso no es una preferencia de estilo: desde el RLS de DOMAINSERV-185 las tablas
+// knowledge_docs y knowledge_chunks solo son visibles con app.current_project_id seteado, y
+// estos comandos son GLOBALES por diseño —recorren la instancia entera, no un proyecto—, así
+// que no tienen un GUC que setear.
+//
+// Con el DSN de app_user (NOBYPASSRLS) el SELECT de filas pendientes devolvería CERO SIN ERROR
+// y el comando reportaría éxito sin haber hecho nada. Ese modo de falla ya ocurrió en este repo
+// por otra causa —el deploy del 2026-07-24 dejó 0 de 2065 observaciones con embedding porque el
+// embedder había degradado a noop y el backfill igual salió bien— y es indistinguible de "no
+// había nada pendiente", que es lo que lo hace peligroso.
+//
+// La lista es UNA SOLA y compartida a propósito: duplicar el orden en los dos comandos es la
+// clase de cosa que diverge, y el que quede atrás falla en silencio.
+var dsnCandidatosMantenimiento = []string{
+	"DOMAIN_DATABASE_ADMIN_URL",
+	"DOMAIN_DATABASE_AUTH_URL",
+	"DOMAIN_DATABASE_URL",
+	"DATABASE_URL",
+}
+
+// resolverDSNMantenimiento devuelve el primer DSN disponible del orden compartido y de dónde
+// salió. El origen se devuelve porque quien llama necesita poder advertir cuando cayó al rol de
+// la app: un backfill que corre con RLS activo no falla, miente.
+func resolverDSNMantenimiento() (dsn string, origen string) {
+	for _, k := range dsnCandidatosMantenimiento {
+		if v := os.Getenv(k); v != "" {
+			return v, k
+		}
+	}
+	return "", ""
+}
+
 // resolveReindexDSN elige el DSN y declara de dónde salió. El origen se reporta porque
 // un fallo de ownership posterior es incomprensible sin saber con qué rol se conectó.
 func resolveReindexDSN(o reindexOpts) (dsn string, origen string, err error) {
 	if o.dsn != "" {
 		return o.dsn, "--dsn", nil
 	}
-	for _, k := range []string{"DOMAIN_DATABASE_ADMIN_URL", "DOMAIN_DATABASE_AUTH_URL", "DOMAIN_DATABASE_URL", "DATABASE_URL"} {
+	for _, k := range dsnCandidatosMantenimiento {
 		if v := os.Getenv(k); v != "" {
 			return v, k, nil
 		}

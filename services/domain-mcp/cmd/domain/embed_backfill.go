@@ -131,13 +131,23 @@ func runEmbedBackfill(args []string) {
 		return
 	}
 
-	dsn := os.Getenv("DOMAIN_DATABASE_URL")
+	// DOMAINSERV-185: el orden lo decide dsnCandidatosMantenimiento y NO se lee
+	// DOMAIN_DATABASE_URL directo. knowledge_chunks es uno de los tres targets del backfill y
+	// desde la 000287 está bajo RLS: con el rol de la app (app_user, NOBYPASSRLS) y sin
+	// app.current_project_id, el SELECT de pendientes devuelve CERO sin error y este comando
+	// reporta éxito sin repoblar un solo vector.
+	dsn, origenDSN := resolverDSNMantenimiento()
 	if dsn == "" {
-		dsn = os.Getenv("DATABASE_URL")
-	}
-	if dsn == "" {
-		fmt.Fprintln(os.Stderr, "DOMAIN_DATABASE_URL no seteado")
+		fmt.Fprintln(os.Stderr, "sin DSN: seteá DOMAIN_DATABASE_ADMIN_URL, DOMAIN_DATABASE_AUTH_URL o DOMAIN_DATABASE_URL")
 		os.Exit(1)
+	}
+	if origenDSN == "DOMAIN_DATABASE_URL" || origenDSN == "DATABASE_URL" {
+		// no se aborta: en dev-local puede no haber otro DSN y el backfill sigue siendo útil
+		// para las dos tablas que NO están bajo RLS (knowledge_observations y skills)
+		fmt.Fprintf(os.Stderr,
+			"advertencia: el DSN viene de %s, que es el rol de la app. Si tiene RLS activo, "+
+				"knowledge_chunks va a verse VACÍO y sus embeddings no se van a repoblar (DOMAINSERV-185)\n",
+			origenDSN)
 	}
 	pool, err := pgxpoolNew(ctx, dsn)
 	if err != nil {

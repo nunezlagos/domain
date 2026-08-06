@@ -35,6 +35,13 @@ except Exception:
     sys.exit(0)
 
 session_id = d.get("session_id", "")
+# DOMAINSERV-245: agent_id viene en el payload SOLO cuando el hook se dispara dentro de un
+# subagente — la doc de Claude Code lo dice textualmente: "Use this to distinguish subagent
+# hook calls from main-thread calls". El session_id, en cambio, SE HEREDA: un subagente usa el
+# del padre, y eso es lo que hacía que su corrida acuñara el marker del padre sin dejar rastro.
+# Ausente = hilo principal.
+agent_id = d.get("agent_id", "") or ""
+agent_type = d.get("agent_type", "") or ""
 cmd = (d.get("tool_input") or {}).get("command", "") or ""
 
 # ¿El comando es una corrida de tests? (una de las suites soportadas)
@@ -59,9 +66,17 @@ is_test = bool(test_re.search(cmd)) and not ayuda_re.search(cmd)
 # -count=1 -run TestNada ./...` sale verde sin ejecutar un solo test.
 #
 # El alcance recorrido viaja en el marker y el gate lo cruza con lo que se va a
-# commitear. Eso además cierra DOMAINSERV-245: un subagente comparte el session_id
-# del padre, así que su corrida escribe el marker del padre y no hay campo que
-# permita distinguirla. Lo que sí se puede exigir es que CUBRA lo que se commitea.
+# commitear. Eso cierra DOMAINSERV-245: un subagente comparte el session_id del
+# padre, así que su corrida escribe el marker del padre — y lo que se le exige NO es
+# ser el hilo principal, sino CUBRIR lo que se commitea.
+#
+# CORRECCIÓN de una premisa que este comentario afirmaba y era falsa: sí hay un campo
+# que distingue a un subagente. agent_id viene en el payload cuando el hook se dispara
+# dentro de uno, y la doc de Claude Code dice textualmente "use this to distinguish
+# subagent hook calls from main-thread calls". Lo que se hereda es el session_id, no
+# el agent_id. Se registra en el campo 6 del marker: no cambia la DECISIÓN (que sigue
+# siendo por alcance, y así un subagente que corrió la suite correcta puede commitear)
+# pero deja auditable quién produjo la evidencia.
 #
 # Se decide sobre el COMANDO y no sobre el output: el shape del tool_response ya
 # rompió este hook dos veces (DOMAINSERV-108), y el comando es dato de entrada.
@@ -213,6 +228,10 @@ else:
     ok = is_test and not signal_fail
 
 print("session_id=%s" % shlex.quote(session_id))
+# el origen viaja al marker como campo 6: no cambia QUIÉN puede commitear —eso lo decide el
+# alcance de DOMAINSERV-237— pero deja auditable quién produjo la evidencia
+print("agent_id=%s" % shlex.quote(agent_id))
+print("agent_type=%s" % shlex.quote(agent_type))
 print("is_test=%s" % shlex.quote("1" if is_test else "0"))
 print("tests_ok=%s" % shlex.quote("1" if ok else "0"))
 print("es_prueba=%s" % shlex.quote("1" if es_prueba else "0"))
@@ -257,7 +276,19 @@ if [ "$tests_ok" = "1" ]; then
   fi
   scopes_acumulados=$(printf '%s %s' "$scopes_previos" "$scopes" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ' ' | sed 's/ $//')
 
-  printf '%s\t%s\t%s\t%s\t%s\n' "$(date -Iseconds)" "${tree_hash:-}" "${code_hash:-}" "${scopes_acumulados:-}" "${runner:-otro}" > "$marker" 2>/dev/null
+  # DOMAINSERV-245: field6 = el ORIGEN de la corrida. "main" cuando la hizo el hilo principal,
+  # o "<agent_type>:<agent_id>" cuando la hizo un subagente. Es un campo NUEVO al final a
+  # propósito: los lectores viejos usan cut -f1..f5 y no se enteran, y un marker escrito antes
+  # de este cambio devuelve vacío en f6, que se lee como origen desconocido.
+  #
+  # NO cambia quién puede commitear: eso lo decide el alcance (field4, DOMAINSERV-237). Lo que
+  # agrega es que el deny pueda decir QUIÉN produjo la evidencia — sin esto, un marker acuñado
+  # por un subagente era indistinguible de uno del hilo principal.
+  origen="main"
+  if [ -n "${agent_id:-}" ]; then
+    origen="${agent_type:-subagente}:${agent_id}"
+  fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -Iseconds)" "${tree_hash:-}" "${code_hash:-}" "${scopes_acumulados:-}" "${runner:-otro}" "$origen" > "$marker" 2>/dev/null
 else
   rm -f "$marker" 2>/dev/null
 fi

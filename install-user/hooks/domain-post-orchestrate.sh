@@ -118,8 +118,9 @@ if [ -r "$LIB" ]; then
   domain_resolve_env 2>/dev/null || true
   if [ -n "$vps_url" ] && [ -n "$api_key" ]; then
     domain_mcp_init >/dev/null 2>&1
+    # agent_id va vacío para el hilo principal, y el server lo trata como el grant de siempre
     resp=$(domain_call_tool domain_flow_grant_token \
-      "{\"flow_run_id\":\"$flow_run_id\",\"session_id\":\"$session_id\",\"allowed_paths\":${allowed_paths_json:-[]}}" 2>/dev/null)
+      "{\"flow_run_id\":\"$flow_run_id\",\"session_id\":\"$session_id\",\"agent_id\":\"${agent_id:-}\",\"allowed_paths\":${allowed_paths_json:-[]}}" 2>/dev/null)
     token=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:

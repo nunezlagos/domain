@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 90189221-dd5d-43d7-b7ab-2760f2832786
+  issue_slug: issue-54.9-autorizacion-de-edicion-por-agente
+  req: REQ-54-orchestrator-tool-contract
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": ae4db575194c93f5c117c756a36fe030c2164b342fda2341a39f18bc19d0e662
+  "design.md": 5ba5e7d63c12f01180b2f11550b9dda27991094c1a5e19fe9558d91208a99702
+  "tasks.md": c44a6246bdaccaa431e9c1413dc5f1828a46a9169682ffaea506041598bd6f57
+  "specs/issue-54.9-autorizacion-de-edicion-por-agente/spec.md": 15e650634fd5de6c9b43a87812334453a843ccf50bc015aa2b91f50d00df57b7

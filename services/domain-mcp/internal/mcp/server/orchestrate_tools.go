@@ -349,6 +349,9 @@ func toolFlowGrantToken() mcp.Tool {
 		mcp.WithArray("allowed_paths",
 			mcp.Description("DOMAINSERV-110 batch-mode: globs de paths que este flow autoriza a editar. Si se pasa, el gate pre-edit solo permite ediciones cuyo path matchee uno de estos globs (scope por sub-tarea en multiagent paralelo). Vacío/omitido = sin restricción de path (comportamiento histórico)."),
 		),
+		mcp.WithString("agent_id",
+			mcp.Description("DOMAINSERV-218: agente al que se ata el token (del hook payload; presente solo dentro de un subagente). Omitido = token de sesión, el comportamiento histórico del hilo principal. Con él, el token solo lo puede usar ESE agente, que es lo que permite darle a cada sub-tarea su propio allowed_paths."),
+		),
 	)
 }
 
@@ -362,6 +365,9 @@ func toolFlowValidateToken() mcp.Tool {
 		mcp.WithString("session_id",
 			mcp.Description("session_id de la sesión que valida (del hook payload). Debe coincidir con el del token."),
 			mcp.Required(),
+		),
+		mcp.WithString("agent_id",
+			mcp.Description("DOMAINSERV-218: agente que valida (del hook payload; ausente en el hilo principal). Debe coincidir EXACTAMENTE con el del token: un token de otro agente, o un token sin agente presentado por uno, devuelven agent_mismatch."),
 		),
 	)
 }
@@ -436,7 +442,8 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
 	}
 
-	token, err := h.flowToken.GenerateToken(flowRunID, sessionID, h.principal.OrganizationID, allowedPaths...)
+	agentID := req.GetString("agent_id", "")
+	token, err := h.flowToken.GenerateTokenParaAgente(flowRunID, sessionID, h.principal.OrganizationID, agentID, allowedPaths)
 	if err != nil {
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
 	}
@@ -445,6 +452,7 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		"token":       token,
 		"flow_run_id": flowRunID,
 		"session_id":  sessionID,
+		"agent_id":    agentID,
 		"expires_in":  int(flowsvc.FlowTokenTTL.Seconds()),
 	})
 }
@@ -485,6 +493,20 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 	}
 	if payload.SessionID != req.GetString("session_id", "") {
 		return flowInvalidResult("session_mismatch"), nil
+	}
+
+	// DOMAINSERV-218: el check de sesión de arriba NO discrimina entre dos subagentes,
+	// porque el session_id se hereda del padre. Sin este, A presenta el token de B y edita
+	// su territorio.
+	//
+	// La comparación es SIMÉTRICA a propósito: si un token sin agente lo pudiera usar
+	// cualquiera, un subagente se saldría de su scope pidiendo un grant sin agent_id.
+	//
+	// Esto NO deja al subagente sin token propio afuera: ese caso no llega acá, cae al
+	// fallback del marker de sesión del padre (pre-edit.sh:114-121). El deny aplica cuando
+	// HAY un token de otro agente, no cuando no hay ninguno.
+	if payload.AgentID != req.GetString("agent_id", "") {
+		return flowInvalidResult("agent_mismatch"), nil
 	}
 
 	// validate flow is still active server-side (fail-closed: DOMAINSERV-94)

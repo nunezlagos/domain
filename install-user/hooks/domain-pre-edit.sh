@@ -1331,8 +1331,17 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       # no confirmado / server unreachable → fail-closed → gate
     elif [ -n "$field1" ]; then
       # v2: field1 = token HMAC → validar firma + flow activo server-side
+      #
+      # DOMAINSERV-218: el agente se manda SOLO si el marker que se está usando es el PROPIO.
+      # Si se cayó al fallback del marker de sesión, el token es el del padre y no lleva
+      # agente: mandar el nuestro haría que el server responda agent_mismatch y dejaría sin
+      # editar justamente al subagente que el fallback existe para autorizar.
+      agente_del_token=""
+      case "$marker" in
+        *"-${agent_id:-__sin_agente__}") agente_del_token="${agent_id:-}" ;;
+      esac
       resp=$(domain_call_tool domain_flow_validate_token \
-        "{\"token\":\"$field1\",\"session_id\":\"$session_id\"}" 2>/dev/null)
+        "{\"token\":\"$field1\",\"session_id\":\"$session_id\",\"agent_id\":\"$agente_del_token\"}" 2>/dev/null)
       # vinfo = "<valid>\t<allowed_paths_json>" (DOMAINSERV-110 batch-mode)
       vinfo=$(printf '%s' "$resp" | python3 -c '
 import json, sys

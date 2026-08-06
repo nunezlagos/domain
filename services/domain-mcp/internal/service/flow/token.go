@@ -28,6 +28,16 @@ type FlowTokenPayload struct {
 	// (scope por sub-tarea en multiagent paralelo). Vacío = sin restricción de
 	// path (comportamiento histórico, backward-compatible).
 	AllowedPaths []string `json:"p,omitempty"`
+	// AgentID (DOMAINSERV-218): a QUIÉN autoriza este token. El SessionID no
+	// alcanza porque se hereda del padre, así que N subagentes de una sesión
+	// compartían un único allowed_paths y no había forma de denegarle a uno el
+	// territorio de otro.
+	//
+	// omitempty NO es cosmético: sin él, un grant sin agente agregaría `"a":""` al
+	// cuerpo firmado y el token del hilo principal dejaría de ser el de antes de
+	// este cambio. Ese es el invariante que hace seguro tocar el gate que autoriza
+	// las propias ediciones.
+	AgentID string `json:"a,omitempty"`
 }
 
 type FlowTokenService struct {
@@ -47,6 +57,16 @@ func (s *FlowTokenService) IsConfigured() bool {
 }
 
 func (s *FlowTokenService) GenerateToken(flowRunID, sessionID, orgID string, allowedPaths ...string) (string, error) {
+	return s.GenerateTokenParaAgente(flowRunID, sessionID, orgID, "", allowedPaths)
+}
+
+// GenerateTokenParaAgente emite un token atado a UN agente (DOMAINSERV-218). Se agrega como
+// constructor hermano y no como parámetro de GenerateToken porque su último parámetro es
+// variádico: un posicional nuevo rompería a todos los callers, incluidos los tests verdes.
+//
+// agentID vacío produce exactamente el token de antes de este cambio, que es lo que mantiene
+// autorizado al hilo principal y al subagente que todavía no tiene token propio.
+func (s *FlowTokenService) GenerateTokenParaAgente(flowRunID, sessionID, orgID, agentID string, allowedPaths []string) (string, error) {
 	if !s.IsConfigured() {
 		return "", ErrTokenNotConfigured
 	}
@@ -57,6 +77,7 @@ func (s *FlowTokenService) GenerateToken(flowRunID, sessionID, orgID string, all
 		OrgID:        orgID,
 		ExpiresAt:    time.Now().UTC().Add(s.ttl).Unix(),
 		AllowedPaths: allowedPaths,
+		AgentID:      agentID,
 	}
 
 	body, err := json.Marshal(payload)

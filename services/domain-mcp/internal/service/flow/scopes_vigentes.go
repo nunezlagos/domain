@@ -33,10 +33,10 @@ func SolapamientoConOtros(solicitante string, nueva []string, vigentes []ScopeVi
 		if v.AgentID == solicitante || len(v.AllowedPaths) == 0 {
 			continue
 		}
-		gi, gj, hay := primerSolape(nueva, v.AllowedPaths)
-		if hay {
-			return fmt.Errorf("%w: %q choca con %q, del agente %q",
-				ErrAllowlistSolapada, gi, gj, v.AgentID)
+		// se delega en ValidarParticionDisjunta en vez de comparar acá: duplicar el criterio de
+		// solapamiento haría que un arreglo en uno de los dos no llegue al otro
+		if err := ValidarParticionDisjunta([][]string{nueva, v.AllowedPaths}); err != nil {
+			return fmt.Errorf("%w (contra el agente %q)", err, v.AgentID)
 		}
 	}
 	return nil

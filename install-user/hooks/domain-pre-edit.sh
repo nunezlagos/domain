@@ -1342,7 +1342,9 @@ if [ -r "$marker" ] && [ -r "$LIB" ]; then
       esac
       resp=$(domain_call_tool domain_flow_validate_token \
         "{\"token\":\"$field1\",\"session_id\":\"$session_id\",\"agent_id\":\"$agente_del_token\"}" 2>/dev/null)
-      # vinfo = "<valid>\t<allowed_paths_json>" (DOMAINSERV-110 batch-mode)
+      # vinfo = "<valid>\t<allowed_paths_json>\t<token_renovado>" — el campo 3 se agrega al
+      # FINAL (DOMAINSERV-218): los lectores que usen cut -f1..f2 no se enteran, y un server
+      # viejo que no renueva devuelve vacío ahí, que se trata como "no hubo renovación".
       vinfo=$(printf '%s' "$resp" | python3 -c '
 import json, sys
 try:
@@ -1352,13 +1354,27 @@ try:
             body = json.loads(c["text"])
             if body.get("valid"):
                 ap = body.get("allowed_paths") or []
-                print("yes\t" + json.dumps(ap))
+                print("yes\t" + json.dumps(ap) + "\t" + (body.get("token") or ""))
             break
 except Exception:
     pass
 ' 2>/dev/null)
       valid=$(printf '%s' "$vinfo" | cut -f1)
       allowed_json=$(printf '%s' "$vinfo" | cut -f2)
+      token_renovado=$(printf '%s' "$vinfo" | cut -f3)
+      # DOMAINSERV-218: si al token le quedaba poca vigencia, el server devolvió uno nuevo. Se
+      # reescribe el marker acá para que el TTL mida INACTIVIDAD: mientras el agente edite, su
+      # autorización se corre sola y una fase larga no la pierde a mitad de camino.
+      #
+      # Un fallo escribiendo NO bloquea la edición que ya está autorizada: el peor caso es que
+      # el token venza como antes de este cambio.
+      if [ -n "$token_renovado" ] && [ "$token_renovado" != "$field1" ]; then
+        nueva_exp=$(python3 -c '
+from datetime import datetime, timezone, timedelta
+print((datetime.now(timezone.utc) + timedelta(seconds=1800)).isoformat())
+' 2>/dev/null)
+        printf '%s\t%s\n' "$token_renovado" "$nueva_exp" > "$marker" 2>/dev/null || true
+      fi
       if [ "$valid" = "yes" ]; then
         # sin allowlist (flow normal) → sin restricción de path (backward-compat).
         if [ -z "$allowed_json" ] || [ "$allowed_json" = "[]" ] || [ "$allowed_json" = "null" ]; then

@@ -2,8 +2,11 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpgo "github.com/mark3labs/mcp-go/server"
 
@@ -12,6 +15,7 @@ import (
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	orchsvc "nunezlagos/domain/internal/service/orchestrator"
 	"nunezlagos/domain/internal/service/orchestrator/phases"
+	"nunezlagos/domain/internal/store/txctx"
 )
 
 type orchestratorService interface {
@@ -414,6 +418,47 @@ func allowedPathsDelRequest(req mcp.CallToolRequest) []string {
 	return out
 }
 
+// scopeDelFlowRun deriva el proyecto del flow_run y deja el GUC seteado. Hace falta un camino
+// propio y no alcanza withProjectTxHandler: ese resuelve el scope desde el project_slug DEL
+// REQUEST, y grant_token recibe flow_run_id, no slug.
+func scopeDelFlowRun(ctx context.Context, tx pgx.Tx, flowRunID uuid.UUID) error {
+	var projectID *uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT project_id FROM flow_runs WHERE id = $1`, flowRunID).Scan(&projectID)
+	if err != nil {
+		return fmt.Errorf("flow_run %s: %w", flowRunID, err)
+	}
+	if projectID == nil {
+		return fmt.Errorf("flow_run %s no tiene proyecto: sin eje de scope el RLS devolvería 0 filas sin error", flowRunID)
+	}
+	return setProjectScope(ctx, *projectID)
+}
+
+// reservarTerritorio es el caller que hace real el criterio 3 de DOMAINSERV-218: rechaza el
+// solapamiento contra los scopes vigentes ANTES de emitir, y registra el propio.
+//
+// SIN TX NO PERSISTE Y NO FALLA, a propósito. La firma HMAC y el check de flow activo son el
+// fail-closed de este camino; negar el grant porque no hay pool dejaría el gate insatisfacible
+// en cualquier server sin base, y un gate que deniega lo legítimo empuja al bypass permanente
+// (DOMAINSERV-111/175/195). Lo que se pierde sin tx es el aislamiento entre agentes, no la
+// autenticidad del token.
+func reservarTerritorio(ctx context.Context, flowRunID uuid.UUID, agentID string, allowedPaths []string) error {
+	tx := txctx.TxFromContext(ctx)
+	if tx == nil {
+		return nil
+	}
+	if err := scopeDelFlowRun(ctx, tx, flowRunID); err != nil {
+		return err
+	}
+	vigentes, err := flowsvc.ScopesVigentesDelFlow(ctx, tx, flowRunID)
+	if err != nil {
+		return err
+	}
+	if err := flowsvc.SolapamientoConOtros(agentID, allowedPaths, vigentes); err != nil {
+		return err
+	}
+	return flowsvc.RegistrarScope(ctx, tx, flowRunID, agentID, allowedPaths, time.Now().UTC().Add(flowsvc.FlowTokenTTL))
+}
+
 func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	if h.principal == nil {
 		return mcp.NewToolResultError("no authenticated principal (set DOMAIN_API_KEY)"), nil
@@ -443,6 +488,15 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 	}
 
 	agentID := req.GetString("agent_id", "")
+
+	// el territorio se reserva ANTES de firmar: si el scope choca con el de otro agente, no
+	// puede quedar un token emitido para una allowlist que el gate despues rechazaria
+	if fid, perr := uuid.Parse(flowRunID); perr == nil {
+		if err := reservarTerritorio(ctx, fid, agentID, allowedPaths); err != nil {
+			return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
+		}
+	}
+
 	token, err := h.flowToken.GenerateTokenParaAgente(flowRunID, sessionID, h.principal.OrganizationID, agentID, allowedPaths)
 	if err != nil {
 		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
@@ -536,13 +590,41 @@ func (h *orchestrateHandlers) handleFlowValidateToken(ctx context.Context, req m
 		})
 	}
 
-	return toolResultJSON(map[string]any{
+	res := map[string]any{
 		"valid":         true,
 		"flow_run_id":   payload.FlowRunID,
 		"session_id":    payload.SessionID,
 		"flow_status":   flowStatus,
 		"allowed_paths": payload.AllowedPaths,
-	})
+	}
+	// DOMAINSERV-218: renovación deslizante. Con esto el TTL mide inactividad y no duración de
+	// tarea, así que una fase larga no pierde la autorización a mitad de camino. Solo bajo el
+	// umbral: el pre-edit es camino caliente y no puede escribir en cada edición.
+	if renovado := h.renovarSiLeQuedaPoco(ctx, payload); renovado != "" {
+		res["token"] = renovado
+	}
+	return toolResultJSON(res)
+}
+
+// renovarSiLeQuedaPoco corre la expiración hacia adelante y devuelve un token nuevo, o "" si no
+// hacía falta. Un fallo renovando NO invalida la validación que ya pasó: el peor caso es que el
+// token venza como antes de este cambio, y eso degrada al comportamiento de hoy, no a algo peor.
+func (h *orchestrateHandlers) renovarSiLeQuedaPoco(ctx context.Context, payload *flowsvc.FlowTokenPayload) string {
+	if !flowsvc.NecesitaRenovacion(payload.ExpiresAt, time.Now().UTC()) {
+		return ""
+	}
+	nuevo, err := h.flowToken.GenerateTokenParaAgente(
+		payload.FlowRunID, payload.SessionID, payload.OrgID, payload.AgentID, payload.AllowedPaths)
+	if err != nil {
+		return ""
+	}
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		if fid, perr := uuid.Parse(payload.FlowRunID); perr == nil && scopeDelFlowRun(ctx, tx, fid) == nil {
+			_ = flowsvc.RegistrarScope(ctx, tx, fid, payload.AgentID, payload.AllowedPaths,
+				time.Now().UTC().Add(flowsvc.FlowTokenTTL))
+		}
+	}
+	return nuevo
 }
 
 func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -564,6 +646,15 @@ func (h *orchestrateHandlers) handleFlowCancel(ctx context.Context, req mcp.Call
 	status, err := h.orchestrator.CancelFlow(ctx, flowRunID, reason)
 	if err != nil {
 		return mcp.NewToolResultError("flow_cancel: " + err.Error()), nil
+	}
+
+	// DOMAINSERV-218: el territorio se suelta acá y no se espera al TTL. Sin esto, un re-grant
+	// después de cancelar chocaría por solapamiento contra los scopes de un flow que ya no corre.
+	// Un fallo liberando NO invalida el cancel, que ya ocurrió: el TTL los vence igual.
+	if tx := txctx.TxFromContext(ctx); tx != nil {
+		if err := scopeDelFlowRun(ctx, tx, flowRunID); err == nil {
+			_ = flowsvc.LiberarScopesDelFlow(ctx, tx, flowRunID)
+		}
 	}
 	return toolResultJSON(status)
 }
@@ -593,8 +684,11 @@ func registerOrchestrateTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerT
 		{Tool: toolOrchestratePhaseResult(), Handler: wrap.Wrap("domain_orchestrate_phase_result", h.handleOrchestratePhaseResult)},
 		{Tool: toolOrchestrateConfirm(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_orchestrate_confirm", h.handleOrchestrateConfirm))},
 		{Tool: toolFlowStatus(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_status", h.handleFlowStatus))},
-		{Tool: toolFlowCancel(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_cancel", h.handleFlowCancel))},
-		{Tool: toolFlowGrantToken(), Handler: conWorkflowDeLaCorrida(wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken))},
+		{Tool: toolFlowCancel(), Handler: conWorkflowDeLaCorrida(withOrgTxHandler(&deps, wrap.Wrap("domain_flow_cancel", h.handleFlowCancel)))},
+		// DOMAINSERV-218: el grant necesita tx porque flow_agent_scopes tiene FORCE RLS y el GUC
+		// de proyecto solo vive dentro de una. Sin pool sigue emitiendo sin persistir, ver
+		// reservarTerritorio.
+		{Tool: toolFlowGrantToken(), Handler: conWorkflowDeLaCorrida(withOrgTxHandler(&deps, wrap.Wrap("domain_flow_grant_token", h.handleFlowGrantToken)))},
 		{Tool: toolFlowValidateToken(), Handler: wrap.Wrap("domain_flow_validate_token", h.handleFlowValidateToken)},
 	}
 }

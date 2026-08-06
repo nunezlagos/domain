@@ -160,3 +160,71 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
+
+  # DOMAINSERV-234: los dos jobs de test corren con -race, así que un archivo con
+  # `//go:build !race` NO lo compilaba NINGUNO. Medido con go list, que es autoritativo:
+  # `go list -tags race -f '{{.TestGoFiles}}' ./internal/httpserver/` no incluía
+  # listen_e2e_test.go, o sea que sus 3 tests no existían en CI.
+  #
+  # skill_type_cleanup_test.go perdió el tag —era gratuito, no spawnea subprocesos— y ya
+  # entra en el job unitario. listen_e2e_test.go SÍ lanza subprocesos con exec.Command, y
+  # ahí el tag es legítimo: el race detector no conversa bien con eso. Por eso este job
+  # existe en vez de borrar el tag: corre exactamente esos tests SIN -race.
+  e2e-sin-race:
+    name: E2E excluidos por -race
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: services/domain-mcp/go.sum
+      - name: go test sin -race (los archivos con //go:build !race)
+        run: go test -count=1 -timeout=5m ./internal/httpserver/ ./internal/admin/
+      # Sin esto el job puede quedar verde por vacío: si mañana alguien borra el tag o
+      # mueve el archivo, queremos enterarnos acá y no descubrir el hueco de nuevo.
+      - name: el archivo con el tag tiene que seguir existiendo
+        run: |
+          set -euo pipefail
+          if ! grep -rq 'go:build !race' internal/httpserver/; then
+            echo "internal/httpserver ya no tiene archivos con //go:build !race."
+            echo "Si el tag se quitó, estos tests ya corren en el job unitario y este job sobra:"
+            echo "borralo en vez de dejarlo pasando en vacío (DOMAINSERV-234)."
+            exit 1
+          fi
+
+  # DOMAINSERV-234: los 3 SDKs son la cara externa del producto y ningún job los tocaba.
+  # `go list ./...` desde services/domain-mcp devuelve CERO paquetes de sdks porque
+  # sdks/go/go.mod declara un módulo APARTE, y ./... no desciende a módulos anidados.
+  sdk-tests:
+    name: SDKs publicados (go, python, typescript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: services/domain-mcp/sdks/go/go.sum
+      - name: SDK go
+        working-directory: services/domain-mcp/sdks/go
+        run: go test -count=1 ./...
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: SDK python
+        working-directory: services/domain-mcp/sdks/python
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]' || pip install -e . pytest
+          pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: SDK typescript
+        working-directory: services/domain-mcp/sdks/typescript
+        run: |
+          set -euo pipefail
+          npm ci || npm install
+          npm test

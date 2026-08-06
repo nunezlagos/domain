@@ -1,0 +1,127 @@
+name: CI shell guards
+
+# DOMAINSERV-234: 17 suites de guard escritas en shell, todas con bit de ejecución y shebang,
+# y ningún workflow corría 10 de ellas. Las 7 de install-user/ ya quedaron cableadas en el
+# commit 522f325e; este workflow cubre las 10 restantes, en 4 directorios que ningún pipeline
+# tocaba.
+#
+# La policy del repo es "un guard que no se ejecuta no es un guard". Estas suites son
+# especialmente valiosas porque prueban cosas que un test de Go no puede: el Caddyfile REAL
+# contra un Caddy real, que el tarpit retenga con 3 sujetos concurrentes, y el guard de backup
+# de Postgres con un shim de docker en el PATH.
+#
+# Las 10 se corrieron localmente antes de cablearlas y las 10 pasan: este workflow no se agrega
+# con la esperanza de que funcionen. Un workflow que falla siempre se termina ignorando, y
+# entonces el guard vuelve a no ejecutarse — que es exactamente el agujero que este ticket cierra.
+
+on:
+  push:
+    branches: [services, main]
+    paths:
+      - 'scripts/**'
+      - 'services/scripts/**'
+      - 'services/caddy/**'
+      - 'services/domain-mcp/deploy/monitoring/**'
+      - '.github/workflows/ci-shell-guards.yml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'services/scripts/**'
+      - 'services/caddy/**'
+      - 'services/domain-mcp/deploy/monitoring/**'
+      - '.github/workflows/ci-shell-guards.yml'
+
+jobs:
+  shell-guards:
+    name: Suites de guard en shell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # socat lo exige tarpit_test.sh explícitamente (aborta con "hace falta socat"), así que
+      # sin esto el job fallaría por entorno y no por el guard.
+      - name: Dependencias de las suites
+        run: sudo apt-get update && sudo apt-get install -y socat
+
+      # caddyfile-scan-fingerprint_test.sh ASUME la imagen domain-caddy:plugins y no la
+      # construye. El Dockerfile está en el repo, así que el job se hace autosuficiente en vez
+      # de depender de un registry.
+      - name: Construir la imagen de Caddy que el test usa
+        run: docker build -t domain-caddy:plugins services/caddy
+
+      # GUARD DE COBERTURA, y es la parte que impide que el hueco se reabra: la lista de suites
+      # es explícita, y si el repo tiene una que no está acá el job FALLA. Descubrir con un glob
+      # y correr a ciegas parece más elegante, pero una suite nueva con una dependencia que el
+      # runner no tiene dejaría el workflow rojo para siempre, y un workflow que siempre falla se
+      # ignora. Que la lista sea explícita fuerza la DECISIÓN de cablear o excluir con razón.
+      - name: Ninguna suite de shell queda sin cablear
+        run: |
+          set -euo pipefail
+          esperadas=$(cat <<'EOF'
+          scripts/tests/test_deploy.sh
+          scripts/tests/test_orchestrator.sh
+          scripts/tests/test_path_filters.sh
+          services/caddy/caddyfile-scan-fingerprint_test.sh
+          services/domain-mcp/deploy/monitoring/loki-config_test.sh
+          services/domain-mcp/deploy/monitoring/tarpit_test.sh
+          services/scripts/config-drift_test.sh
+          services/scripts/healthcheck-alert_test.sh
+          services/scripts/monitoring-verify_test.sh
+          services/scripts/pg-backup-guard_test.sh
+          EOF
+          )
+          # install-user/ va excluido a propósito: sus 7 suites las corre ci-install-user.yml
+          encontradas=$(git ls-files | grep -E '_test\.sh$|test_.*\.sh$' | grep -v '^install-user/' | sort)
+          if [ -z "$encontradas" ]; then
+            echo "no se encontró NINGUNA suite de shell: el descubrimiento está roto y este job"
+            echo "estaría quedando verde por vacío (DOMAINSERV-234)."
+            exit 1
+          fi
+          nuevas=$(comm -13 <(echo "$esperadas" | sort) <(echo "$encontradas") || true)
+          if [ -n "$nuevas" ]; then
+            echo "hay suites de shell que este workflow NO corre:"
+            echo "$nuevas"
+            echo
+            echo "Agregalas a la lista de 'esperadas' y al step de ejecución, o excluilas con su"
+            echo "razón. Una suite ejecutable que ningún pipeline corre no es un guard."
+            exit 1
+          fi
+          faltantes=$(comm -23 <(echo "$esperadas" | sort) <(echo "$encontradas") || true)
+          if [ -n "$faltantes" ]; then
+            echo "la lista de esperadas menciona suites que ya no existen:"
+            echo "$faltantes"
+            echo "sacalas, o la lista deja de describir el repo y tapa una suite nueva."
+            exit 1
+          fi
+
+      - name: Correr las 10 suites
+        run: |
+          set -uo pipefail
+          fallidas=""
+          for s in \
+            scripts/tests/test_deploy.sh \
+            scripts/tests/test_orchestrator.sh \
+            scripts/tests/test_path_filters.sh \
+            services/scripts/config-drift_test.sh \
+            services/scripts/healthcheck-alert_test.sh \
+            services/scripts/monitoring-verify_test.sh \
+            services/scripts/pg-backup-guard_test.sh \
+            services/domain-mcp/deploy/monitoring/loki-config_test.sh \
+            services/domain-mcp/deploy/monitoring/tarpit_test.sh \
+            services/caddy/caddyfile-scan-fingerprint_test.sh \
+          ; do
+            echo "::group::$s"
+            if bash "$s"; then
+              echo "OK $s"
+            else
+              echo "FALLO $s"
+              fallidas="$fallidas $s"
+            fi
+            echo "::endgroup::"
+          done
+          # no se corta en la primera: saber cuáles de las 10 fallan en una sola corrida vale
+          # más que enterarse de a una
+          if [ -n "$fallidas" ]; then
+            echo "suites fallidas:$fallidas"
+            exit 1
+          fi

@@ -18,15 +18,71 @@ func TestNewStdioClient_FailsWithoutCommand(t *testing.T) {
 
 // TestStdioClient_HandshakeAndListTools usa un mock server via shell script
 // que responde a initialize + tools/list. Solo corre si /bin/sh disponible.
+// DOMAINSERV-234: este test tenía el cuerpo VACÍO y un
+// t.Skip("requires external mock server; covered by integration suite") incondicional, en un
+// archivo SIN build tag — o sea muerto en el job unitario y en el de integración.
+//
+// Y la razón declarada era FALSA: no hay ninguna suite de integración que cubra el handshake.
+// El paquete internal/mcp/client tiene exactamente dos archivos, stdio.go y stdio_test.go, así
+// que "covered by integration suite" apuntaba a algo que no existe. Borrar el test habría hecho
+// desaparecer la única señal de que este camino no estaba cubierto, así que se implementa.
+//
+// El "mock server externo" tampoco hacía falta: el protocolo es JSON-RPC por líneas y el propio
+// comentario original decía "solo corre si /bin/sh disponible". Un sh que lee dos líneas y
+// responde dos alcanza — y es determinista porque los ids del cliente son incrementales:
+// Initialize pide el 1 y ListTools el 2.
 func TestStdioClient_HandshakeAndListTools(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip stdio integration in short mode")
+	const mock = `read _linea_initialize
+printf '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}\n'
+read _linea_tools_list
+printf '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"eco","description":"repite lo que le pasan"}]}}\n'
+`
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	c, err := NewStdioClient(ctx, Config{Command: "/bin/sh", Args: []string{"-c", mock}})
+	if err != nil {
+		t.Fatalf("spawn del mock: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	if err := c.Initialize(ctx); err != nil {
+		t.Fatalf("Initialize contra un server que responde OK falló: %v", err)
 	}
 
+	tools, err := c.ListTools(ctx)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	if len(tools) != 1 {
+		t.Fatalf("se esperaba 1 tool y llegaron %d: %+v", len(tools), tools)
+	}
+	if tools[0].Name != "eco" {
+		t.Errorf("el nombre de la tool no sobrevivió el decode: %q", tools[0].Name)
+	}
+	if tools[0].Description == "" {
+		t.Error("la descripción llegó vacía: el decode de tools/list está perdiendo campos")
+	}
+}
 
+// La contracara, que es la que hace al test un test: si el server muere sin responder, el
+// cliente tiene que devolver error y NO colgarse. Sin este caso, el de arriba pasaría igual con
+// un call() que ignora los errores.
+func TestStdioClient_ServerQueMuereSinResponder_DevuelveErrorYNoCuelga(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
+	// sh que cierra stdout de inmediato: el readLoop ve EOF con un pending esperando
+	c, err := NewStdioClient(ctx, Config{Command: "/bin/sh", Args: []string{"-c", "exit 0"}})
+	if err != nil {
+		t.Fatalf("spawn: %v", err)
+	}
+	defer func() { _ = c.Close() }()
 
-	t.Skip("requires external mock server; covered by integration suite")
+	if err := c.Initialize(ctx); err == nil {
+		t.Error("el server murió sin responder y Initialize devolvió nil: un pending que nunca " +
+			"se resuelve deja al caller colgado hasta el timeout del ctx")
+	}
 }
 
 // TestCallResult_DecodeJSON verifica el shape del result.

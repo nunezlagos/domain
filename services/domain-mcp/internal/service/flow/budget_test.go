@@ -51,6 +51,10 @@ func TestBudgetCache_CacheExpiry(t *testing.T) {
 	require.True(t, time.Now().After(entry.expiresAt), "entry should be expired")
 }
 
-func TestGetMaxDuration_IntegrationSkips(t *testing.T) {
-	t.Skip("requires integration database")
-}
+// DOMAINSERV-234: acá vivía TestGetMaxDuration_IntegrationSkips, cuyo cuerpo era solo
+// t.Skip("requires integration database") — y cuyo NOMBRE anunciaba el problema: un test que
+// existe para saltearse. Sin build tag, estaba muerto en los dos jobs del CI.
+//
+// Se eliminó y no se reemplazó porque era REDUNDANTE, medido: GetMaxDuration ya tiene cobertura
+// real en budget_integration_test.go, que la ejerce en 4 lugares con base de verdad. El
+// placeholder no tapaba un hueco, solo inflaba el conteo de tests con uno que no podía fallar.

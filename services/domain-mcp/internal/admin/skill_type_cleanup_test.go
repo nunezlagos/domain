@@ -1,4 +1,13 @@
-//go:build !race
+// DOMAINSERV-234: este archivo tenía `//go:build !race` y con eso NO lo compilaba NINGÚN job
+// del CI — los dos corren con -race, así que el tag lo excluía de ambos. Peor: internal/admin
+// es un paquete solo-test, así que con -race desaparecía entero ("build constraints exclude all
+// Go files"). Un guard que no se ejecuta da sensación de cobertura sin darla, que es peor que no
+// tenerlo.
+//
+// El tag era gratuito acá: este test lee archivos de migración del repo y no spawnea un solo
+// subproceso (cero usos de exec.Command), así que el race detector no tiene nada que romper. El
+// caso legítimo del tag es internal/httpserver/listen_e2e_test.go, que sí lanza subprocesos, y
+// ese va por un job propio sin -race.
 
 // TestSkill_TypeCleanup_MigrationExists verifica que el archivo de
 // migration para Día 1 del RFC 0008 (Opción A: skill_type_cleanup)

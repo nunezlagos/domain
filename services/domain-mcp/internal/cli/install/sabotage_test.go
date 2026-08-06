@@ -326,11 +326,13 @@ func TestSabotage_BackupFile_HugeContent(t *testing.T) {
 
 
 
-func TestSabotage_ParseInstallFlags_UnknownFlag(t *testing.T) {
-
-
-
-
-
-	t.Skip("integration test, requires built binary; verified manually")
-}
+// DOMAINSERV-234: acá vivía TestSabotage_ParseInstallFlags_UnknownFlag, con el cuerpo entero
+// reemplazado por t.Skip("integration test, requires built binary; verified manually"). Se
+// eliminó en vez de arreglarse en este paquete porque la razón del skip era falsa:
+// parseInstallFlags no necesita un binario, es una función pura — lo que pasaba es que vive en
+// cmd/domain sin exportar, así que desde este paquete era inalcanzable y el test nunca pudo
+// escribirse.
+//
+// La prueba real está ahora en cmd/domain/install_flags_test.go, donde la función existe: 6
+// casos, incluido el flag desconocido que este test declaraba cubrir. "verified manually" es lo
+// que la policy guards-deben-ejecutarse prohíbe explícitamente.

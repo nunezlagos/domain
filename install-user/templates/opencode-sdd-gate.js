@@ -71,9 +71,26 @@ function readMarker(sessionID) {
   }
 }
 
+// DOMAINSERV-233: el mtime solo prueba CUÁNDO se tocó el archivo, no que alguien haya corrido
+// tests. Medido: un `touch` del marker —archivo vacío— habilitaba el commit.
+//
+// El hash almacenado es la evidencia; el fail-closed sin él es el arreglo que bash hizo en
+// DOMAINSERV-95 y que nunca cruzó a este plugin. El marker lo escribe domain-post-test.sh con
+// 6 campos: timestamp \t tree_hash \t code_hash \t alcance \t runner \t origen.
+//
+// Precedencia de DOMAINSERV-219: manda el code_hash; el tree_hash solo se acepta si el code_hash
+// no está, que es el caso de un marker escrito por la versión anterior del post-test.
+//
+// Comparar ese hash CONTRA el working tree actual todavía NO se hace acá: exige portar
+// domain_tests_code_hash, que hace dos pasadas de git ls-files. Hasta entonces esto cierra la
+// forja pero no detecta una edición posterior a la corrida.
 function freshMarker(p, maxMinutes) {
   try {
-    return Date.now() - statSync(p).mtimeMs < maxMinutes * 60000
+    if (Date.now() - statSync(p).mtimeMs >= maxMinutes * 60000) return false
+    const campos = readFileSync(p, "utf8").split("\n")[0].split("\t")
+    const codeHash = (campos[2] || "").trim()
+    const treeHash = (campos[1] || "").trim()
+    return (codeHash || treeHash) !== ""
   } catch {
     return false
   }

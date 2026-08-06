@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,9 +21,10 @@ import (
 // NO requiere Bearer auth; auth es por HMAC con secret del webhook config.
 //
 // Headers reconocidos:
-//   X-Hub-Signature-256: sha256=<hex>  (GitHub)
-//   X-Gitlab-Token: <secret>           (GitLab — comparacion constante)
-//   X-Domain-Signature: sha256=<hex>   (generic)
+//
+//	X-Hub-Signature-256: sha256=<hex>  (GitHub)
+//	X-Gitlab-Token: <secret>           (GitLab — comparacion constante)
+//	X-Domain-Signature: sha256=<hex>   (generic)
 func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	if a.WebhookService == nil {
@@ -47,7 +49,6 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	if !verifyWebhookSignature(hook.SourceType, secret, body, r) {
 		_ = a.WebhookService.RecordDelivery(r.Context(), hook.ID, body,
 			collectHeaders(r), r.RemoteAddr, "signature_invalid", nil, "HMAC mismatch")
@@ -55,14 +56,9 @@ func (a *API) receiveWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	inputs := buildInputs(body, hook.InputsMapping)
 
-
-
 	if a.WebhookDispatcher == nil {
-
-
 
 		go a.runWebhookTarget(r.Context(), hook, body, inputs, collectHeaders(r), r.RemoteAddr)
 	} else {
@@ -106,7 +102,6 @@ func verifyWebhookSignature(sourceType string, secret, body []byte, r *http.Requ
 
 func buildInputs(payload []byte, mapping map[string]any) map[string]any {
 	inputs := map[string]any{"raw": json.RawMessage(payload)}
-
 
 	var parsed map[string]any
 	_ = json.Unmarshal(payload, &parsed)
@@ -152,12 +147,41 @@ func splitDot(s string) []string {
 	return out
 }
 
+// denyHeaders son los headers cuyo VALOR no se persiste (DOMAINSERV-240). El más grave es
+// X-Gitlab-Token: para gitlab el secreto ES ese header —`token == string(secret)` en
+// verifyWebhookSignature— así que el log de entregas venía guardando la credencial que valida
+// las entregas, en claro, sin cifrar.
+//
+// Las claves van en minúscula porque la comparación es case-insensitive: Go canonicaliza los
+// headers de una request real, pero RecordDelivery también se llama desde el dispatcher con mapas
+// ya armados a mano, y ahí la capitalización no está garantizada.
+//
+// Sin anotación de tipo a propósito: stateless-lint solo audita las vars con tipo explícito.
+var denyHeaders = map[string]bool{
+	"x-gitlab-token":      true,
+	"x-hub-signature":     true,
+	"x-hub-signature-256": true,
+	"x-domain-signature":  true,
+	"authorization":       true,
+	"proxy-authorization": true,
+	"cookie":              true,
+	"set-cookie":          true,
+}
+
+// collectHeaders copia los headers para el log de la entrega, redactando el VALOR de los
+// sensibles y conservando la CLAVE. La distinción importa: saber que llegó un X-Hub-Signature es
+// lo que sirve para diagnosticar una firma que no cuadra; su contenido es el secreto.
 func collectHeaders(r *http.Request) map[string]string {
 	out := map[string]string{}
 	for k, v := range r.Header {
-		if len(v) > 0 {
-			out[k] = v[0]
+		if len(v) == 0 {
+			continue
 		}
+		if denyHeaders[strings.ToLower(k)] {
+			out[k] = "[redacted]"
+			continue
+		}
+		out[k] = v[0]
 	}
 	return out
 }

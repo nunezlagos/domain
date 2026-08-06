@@ -457,8 +457,29 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Skill, error) {
 	return &sk, nil
 }
 
+// GetBySlug resuelve una skill SIN scope de proyecto, o sea SOLO entre las globales.
+//
+// DOMAINSERV-248: antes resolvía contra toda la tabla sin filtrar, así que devolvía la skill de
+// cualquier proyecto que compartiera el slug. El orgID que recibe NUNCA se usó —está en la firma
+// desde siempre y se descartaba—, y api/handler/skill_metrics.go ya lo llamaba con uuid.Nil.
+//
+// Se conserva la firma para no tocar a los cinco callers de un cambio que es de seguridad: lo que
+// cambia es que ya no puede devolver una skill de proyecto ajeno. Quien necesite resolver una
+// skill DE proyecto usa GetBySlugEnProyecto.
 func (s *Service) GetBySlug(ctx context.Context, orgID uuid.UUID, slug string) (*Skill, error) {
-	row, err := s.q(ctx).SkillGetBySlug(ctx, slug)
+	return s.GetBySlugEnProyecto(ctx, uuid.Nil, slug)
+}
+
+// GetBySlugEnProyecto resuelve prefiriendo la skill del proyecto y cayendo a la global del mismo
+// slug. projectID en uuid.Nil resuelve solo globales.
+//
+// La precedencia es lo que permite que un proyecto especialice una skill global sin renombrarla.
+func (s *Service) GetBySlugEnProyecto(ctx context.Context, projectID uuid.UUID, slug string) (*Skill, error) {
+	var scope *uuid.UUID
+	if projectID != uuid.Nil {
+		scope = &projectID
+	}
+	row, err := s.q(ctx).SkillGetBySlug(ctx, skilldb.SkillGetBySlugParams{Slug: slug, ProjectID: scope})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

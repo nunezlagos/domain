@@ -68,12 +68,25 @@ SELECT id, slug, name, COALESCE(description,'')::text AS description,
 FROM skills WHERE id = sqlc.arg('id') AND deleted_at IS NULL;
 
 -- name: SkillGetBySlug :one
+-- DOMAINSERV-248: filtraba SOLO por slug, así que devolvía la skill de cualquier proyecto que
+-- compartiera el nombre. Con la 000290 el slug es único POR PROYECTO, o sea que dos proyectos
+-- con la misma skill es un caso legítimo — y sin este scope la query no los distingue.
+--
+-- project_id NULL = sin scope: resuelve SOLO globales. Es el default seguro para los callers que
+-- no saben de qué proyecto hablan; antes recibían una de proyecto arbitraria.
+--
+-- El ORDER BY no es cosmético: con scope, la query matchea la global Y la del proyecto. DESC con
+-- NULLS LAST pone primera la del proyecto, que es lo que permite especializar una global.
 SELECT id, slug, name, COALESCE(description,'')::text AS description,
        skill_type, COALESCE(content,'')::text AS content,
        input_schema, output_schema,
        timeout_seconds, idempotent, has_side_effects, depends_on, tags,
        seed_managed, seed_version, is_user_modified, created_at, updated_at
-FROM skills WHERE slug = sqlc.arg('slug') AND deleted_at IS NULL AND proposed = false;
+FROM skills
+WHERE slug = sqlc.arg('slug') AND deleted_at IS NULL AND proposed = false
+  AND (project_id IS NULL OR project_id = sqlc.narg('project_id'))
+ORDER BY project_id DESC NULLS LAST
+LIMIT 1;
 
 -- name: SkillList :many
 SELECT id, slug, name, COALESCE(description,'')::text AS description,

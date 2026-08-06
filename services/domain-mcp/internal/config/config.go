@@ -84,6 +84,13 @@ type Config struct {
 	// en mcp_health_checks cada 60s. Default enabled (bajo consumo).
 	HealthPollerEnabled bool
 
+	// EmbeddingCompleter — repuebla los embeddings que knowledge_save dejó pendientes
+	// (DOMAINSERV-227). Default enabled: sin él los vectores solo se completan en el
+	// próximo deploy, porque embed-backfill no corre en cron.
+	EmbeddingCompleterEnabled   bool
+	EmbeddingCompleterTickSecs  int // default 30
+	EmbeddingCompleterBatchSize int // default 50
+
 	// AuthAnomalyAudit — system cron SOC (DOMAINSERV-82 H3). Cada 15m detecta
 	// brute-force sobre auth_events y emite slog.Warn. Default enabled (barato:
 	// una query indexada por tick).
@@ -203,6 +210,10 @@ func Load() (*Config, error) {
 		OrphanAuditSchedule:            getEnv("DOMAIN_ORPHAN_AUDIT_SCHEDULE", "0 4 * * *"),
 
 		HealthPollerEnabled: getEnvBool("DOMAIN_HEALTH_POLLER_ENABLED", true),
+
+		EmbeddingCompleterEnabled:   getEnvBool("DOMAIN_EMBEDDING_COMPLETER_ENABLED", true),
+		EmbeddingCompleterTickSecs:  getEnvInt("DOMAIN_EMBEDDING_COMPLETER_TICK_SECONDS", 30),
+		EmbeddingCompleterBatchSize: getEnvInt("DOMAIN_EMBEDDING_COMPLETER_BATCH", 50),
 
 		AuthAnomalyAuditEnabled: getEnvBool("DOMAIN_AUTH_ANOMALY_AUDIT_ENABLED", true),
 

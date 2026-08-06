@@ -250,10 +250,6 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 	if len(rawChunks) == 0 {
 		return nil, nil, ErrBodyRequired
 	}
-	embeds, err := s.Embedder.EmbedBatch(ctx, rawChunks)
-	if err != nil {
-		return nil, nil, fmt.Errorf("embed chunks: %w", err)
-	}
 
 	q, commit, release, err := s.escrituraDeSave(ctx)
 	if err != nil {
@@ -281,17 +277,20 @@ func (s *Service) Save(ctx context.Context, in SaveInput) (*Document, []Chunk, e
 		return nil, nil, fmt.Errorf("insert doc: %w", err)
 	}
 
+	// DOMAINSERV-227: los chunks se persisten SIN embedding y el Completer los
+	// repuebla después. Antes el EmbedBatch corría acá mismo, dentro del request: ~2,3s
+	// por chunk contra Ollama, lineal en la cantidad de chunks, de modo que un
+	// documento de 157KB agotaba el timeout del cliente y la ingesta no era posible.
+	// Un embedding en NULL es el estado válido de "pendiente" —nunca un vector de
+	// ceros, que sería indistinguible de uno legítimo (DOMAINSERV-157)— y la búsqueda
+	// sigue encontrando el chunk por el brazo bm25 del RRF mientras tanto.
 	chunks := make([]Chunk, 0, len(rawChunks))
 	for i, content := range rawChunks {
-		var emb *pgvector.Vector
-		if i < len(embeds) {
-			emb = embeddingOrNil(embeds[i])
-		}
 		chRow, err := q.InsertChunk(ctx, knowledgedb.InsertChunkParams{
 			KnowledgeDocID: docRow.ID,
 			ChunkIndex:     int32(i),
 			Content:        content,
-			Embedding:      emb,
+			Embedding:      nil,
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("insert chunk %d: %w", i, err)

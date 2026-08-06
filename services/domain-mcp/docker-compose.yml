@@ -130,6 +130,14 @@ services:
       # corrió en el VPS. El default va en true y no en el .env porque install.sh
       # preserva el .env viejo sin agregarle claves nuevas
       DOMAIN_SKILL_METRICS_ENABLED: "${DOMAIN_SKILL_METRICS_ENABLED:-true}"
+      # DOMAINSERV-227: knowledge_save persiste los chunks con embedding NULL y este
+      # worker los completa después. Si se apaga, los vectores quedan pendientes hasta
+      # el próximo deploy —embed-backfill solo corre desde install.sh, no en cron— y la
+      # búsqueda de esos docs queda solo textual. El default va acá y no en el .env
+      # porque install.sh preserva el .env viejo sin agregarle claves nuevas
+      DOMAIN_EMBEDDING_COMPLETER_ENABLED: "${DOMAIN_EMBEDDING_COMPLETER_ENABLED:-true}"
+      DOMAIN_EMBEDDING_COMPLETER_TICK_SECONDS: "${DOMAIN_EMBEDDING_COMPLETER_TICK_SECONDS:-30}"
+      DOMAIN_EMBEDDING_COMPLETER_BATCH: "${DOMAIN_EMBEDDING_COMPLETER_BATCH:-50}"
       # REQ-54: LLM server-side (MiniMax). Sin esto el proceso Go no ve la key
       # y rerank/inferencia-de-aristas/judge + la preparación de contexto
       # degradan silenciosamente. La key vive en services/.env (LLM_API_KEY);

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"nunezlagos/domain/internal/llm"
+	"nunezlagos/domain/internal/service/embedding"
 )
 
 type backfillOpts struct {
@@ -30,18 +31,19 @@ type backfillTarget struct {
 	hasDeletedAt bool
 }
 
-// backfillTargets son las tablas que el backfill repuebla. knowledge_chunks NO
-// tiene deleted_at — incluir el filtro la rompería con "column does not exist".
+// backfillTargets son las tablas que el backfill repuebla. La lista vive en
+// internal/service/embedding porque el Completer que corre dentro del server barre las
+// mismas filas (DOMAINSERV-227): con dos copias, la que quedara atrás dejaría de
+// repoblar una tabla sin que nada falle.
 func backfillTargets() []backfillTarget {
-	return []backfillTarget{
-		{table: "knowledge_observations", textCol: "content", embCol: "embedding", hasDeletedAt: true},
-		{table: "knowledge_chunks", textCol: "content", embCol: "embedding", hasDeletedAt: false},
-		// DOMAINSERV-157: skills era la única tabla con embedding fuera del
-		// backfill, así que sus vectores en cero no se regeneraban ni con el
-		// binario arreglado. textCol es una expresión porque el service embebe
-		// name + description, no una sola columna.
-		{table: "skills", textCol: "name || ' ' || COALESCE(description, '')", embCol: "embedding", hasDeletedAt: true},
+	targets := embedding.Targets()
+	out := make([]backfillTarget, 0, len(targets))
+	for _, t := range targets {
+		out = append(out, backfillTarget{
+			table: t.Table, textCol: t.TextCol, embCol: t.EmbCol, hasDeletedAt: t.HasDeletedAt,
+		})
 	}
+	return out
 }
 
 func parseBackfillArgs(args []string) backfillOpts {
@@ -65,29 +67,12 @@ func parseBackfillArgs(args []string) backfillOpts {
 	return o
 }
 
-// buildBackfillQuery arma el SELECT de filas pendientes: sin embedding, o con uno
-// en cero. Ese segundo caso existe porque el embedder degradado a noop
-// (DOMAINSERV-157) escribió vectores de ceros, y un vector de ceros NO es NULL:
-// quedaban fuera del backfill para siempre mientras competían en el ranking con
-// la misma distancia contra cualquier búsqueda. Se detectan por el producto
-// interno consigo mismo —-||v||², cero solo en el vector nulo— porque l2_norm es
-// ambiguo en pgvector y vector_dims obligaría a conocer la dimensión.
-//
-// La idempotencia se conserva: una fila con norma real no vuelve a tomarse, así
-// que re-correr el backfill no gasta llamadas al provider.
+// buildBackfillQuery delega en embedding.PendingRowsQuery: el predicado de "pendiente"
+// es uno solo y lo comparte con el Completer del server (DOMAINSERV-227).
 func buildBackfillQuery(table, textCol, embCol string, hasDeletedAt bool) string {
-	deleted := ""
-	if hasDeletedAt {
-		deleted = "\n\t\t   AND deleted_at IS NULL"
-	}
-	return fmt.Sprintf(
-		`SELECT %s, %s FROM %s
-		 WHERE (%s IS NULL OR (%s <#> %s) = 0)%s
-		   AND LENGTH(TRIM(%s)) > 0
-		 ORDER BY created_at ASC
-		 LIMIT $1`,
-		"id", textCol, table, embCol, embCol, embCol, deleted, textCol,
-	)
+	return embedding.PendingRowsQuery(embedding.Target{
+		Table: table, TextCol: textCol, EmbCol: embCol, HasDeletedAt: hasDeletedAt,
+	})
 }
 
 // runEmbedBackfill (REQ-68): recorre las tablas con embedding NULL, genera

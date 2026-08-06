@@ -13,6 +13,7 @@ import (
 	cronsched "nunezlagos/domain/internal/scheduler/cron"
 	systemcron "nunezlagos/domain/internal/scheduler/cron/system"
 	"nunezlagos/domain/internal/scheduler/leader"
+	"nunezlagos/domain/internal/service/embedding"
 	"nunezlagos/domain/internal/service/orchestrator"
 )
 
@@ -156,6 +157,22 @@ func buildRunners(
 				Logger: logger,
 			}
 			go poller.Start(leaderCtx)
+		}
+
+		// DOMAINSERV-227: completa los embeddings que knowledge_save dejó pendientes.
+		// Va sobre pools.Auth (app_admin, BYPASSRLS) y no sobre pools.App: el barrido
+		// es global a la instancia y knowledge_chunks está bajo RLS por
+		// app.current_project_id desde la 000287, así que con el rol de la app el
+		// SELECT devolvería cero filas sin error.
+		if cfg.EmbeddingCompleterEnabled {
+			completer := &embedding.Completer{
+				Pool:     pools.Auth,
+				Embedder: s.Embedder,
+				Tick:     time.Duration(cfg.EmbeddingCompleterTickSecs) * time.Second,
+				Batch:    cfg.EmbeddingCompleterBatchSize,
+				Logger:   logger,
+			}
+			go completer.Start(leaderCtx)
 		}
 
 		if cfg.AuthAnomalyAuditEnabled {

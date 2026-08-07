@@ -30,12 +30,13 @@ const (
 	comandoDeActualizacion = "./install-user/bootstrap.sh"
 
 	// marcadorDelAviso es lo que el hook exige para pegar una línea al bloque de arranque, y
-	// existe por un modo de falla concreto: `flag.Usage = printHelp` y printHelp escribe a
-	// STDOUT, así que un binario VIEJO —o sea todos los ya instalados el día que esto se
-	// despliegue— responde a --version-check imprimiendo su help entero por la misma salida de
-	// la que el hook lee. Sin filtro, esas ~30 líneas se inyectan en cada sesión.
+	// existe por un modo de falla concreto: el usage escribía a STDOUT, así que un binario
+	// VIEJO —o sea todos los ya instalados el día que esto se despliegue— responde a
+	// --version-check imprimiendo su help entero por la misma salida de la que el hook lee.
+	// Sin filtro, esas ~30 líneas se inyectan en cada sesión.
 	//
-	// Arreglar printHelp no alcanza: los binarios viejos no se pueden cambiar retroactivamente.
+	// DOMAINSERV-251 ya mandó el usage por error a stderr, pero eso NO retira este filtro: los
+	// binarios viejos siguen instalados y no se pueden cambiar retroactivamente.
 	marcadorDelAviso = "domain: "
 )
 

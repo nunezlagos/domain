@@ -225,10 +225,10 @@ try:
         except: pass
 except: pass
 " 2>/dev/null)
-  # El grep NO es defensivo de más: `flag.Usage = printHelp` y printHelp escribe a STDOUT, asi
-  # que un binario VIEJO —todos los instalados hoy— responde al flag desconocido imprimiendo su
-  # help entero por la misma salida de la que leemos. Sin el filtro, esas ~30 lineas se pegan al
-  # bloque de arranque de cada sesion. Se toma UNA linea y solo si lleva el marcador del aviso.
+  # El grep NO es defensivo de mas: el usage escribia a STDOUT, asi que un binario VIEJO —todos
+  # los instalados hoy— responde al flag desconocido imprimiendo su help entero por la misma
+  # salida de la que leemos. DOMAINSERV-251 ya lo mando a stderr, pero eso no retira el filtro:
+  # los binarios viejos no se cambian retroactivamente. Se toma UNA linea y solo con el marcador.
   version_notice=$(domain-install --version-check \
     "$(printf '%s' "$server_vers" | sed -n 1p)" \
     "$(printf '%s' "$server_vers" | sed -n 2p)" 2>/dev/null \

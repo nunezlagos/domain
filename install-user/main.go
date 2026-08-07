@@ -46,6 +46,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -84,6 +85,7 @@ func main() {
 		check           bool
 		showVersion     bool
 		versionCheck    bool
+		showHelp        bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
@@ -107,8 +109,21 @@ func main() {
 	flag.BoolVar(&versionCheck, "version-check", false,
 		"Uso interno del hook SessionStart: --version-check <version_del_server> [version_minima]. "+
 			"Imprime la línea de aviso si el cliente quedó atrás, o nada. NUNCA falla")
-	flag.Usage = printHelp
+	// --help/-h se declaran como flags propios en vez de dejárselos al paquete flag: el flag
+	// los trata como error de uso y los manda por el mismo camino que un flag inválido, y son
+	// dos salidas distintas — la ayuda pedida es la salida legítima del programa
+	flag.BoolVar(&showHelp, "help", false, "Imprime esta ayuda y termina")
+	flag.BoolVar(&showHelp, "h", false, "Alias de --help")
+
+	// el usage que dispara un flag inválido es diagnóstico y va a stderr: hooks/domain-session-start.sh
+	// parsea el stdout de este binario y estas ~30 líneas se lo contaminaban (DOMAINSERV-251)
+	flag.Usage = func() { escribirHelp(flag.CommandLine.Output()) }
 	flag.Parse()
+
+	if showHelp {
+		escribirHelp(os.Stdout)
+		return
+	}
 
 	// Antes que doctor: el hook lo invoca en cada arranque de sesión y no puede pagar el
 	// costo ni los efectos de ninguna otra ruta.
@@ -153,8 +168,8 @@ func main() {
 	})
 }
 
-func printHelp() {
-	fmt.Println(`domain-install — instalador cross-platform del cliente MCP domain.
+func escribirHelp(w io.Writer) {
+	fmt.Fprintln(w, `domain-install — instalador cross-platform del cliente MCP domain.
 
 Uso:
   domain-install                                          # interactive

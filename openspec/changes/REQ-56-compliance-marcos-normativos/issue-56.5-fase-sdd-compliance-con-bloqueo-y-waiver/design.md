@@ -78,7 +78,7 @@ sdd-design  ──> declara qué datos toca y qué controles piensa implementar
      ▼
 sdd-compliance
      ├─ ¿el proyecto declaró marcos?  NO → verdict: not_applicable, no-op
-     ├─ SÍ → obligaciones = marcos declarados ⋈ framework_controls
+     ├─ SÍ → obligaciones = marcos declarados ⋈ compliance_framework_controls
      ├─ contrasta contra lo que el design declara
      ├─ severidad = f(obligatorio, vigente_desde)
      └─ ¿hay BLOCKER sin waiver?

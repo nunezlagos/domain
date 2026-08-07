@@ -201,13 +201,13 @@ func TestCrosswalk_UnControlSatisfaceVariosMarcos_ConSuPropiaReferencia(t *testi
 		referencia string
 	}{{gdpr, "Art. 32"}, {iso, "A.8.24"}} {
 		_, err := f.pools.App.Exec(ctx,
-			`INSERT INTO framework_controls (framework_id, control_id, referencia)
+			`INSERT INTO compliance_framework_controls (framework_id, control_id, referencia)
 			 VALUES ($1, $2, $3)`, v.marco, control, v.referencia)
 		require.NoError(t, err)
 	}
 
 	rows, err := f.pools.App.Query(ctx,
-		`SELECT cf.slug, fc.referencia FROM framework_controls fc
+		`SELECT cf.slug, fc.referencia FROM compliance_framework_controls fc
 		 JOIN compliance_frameworks cf ON cf.id = fc.framework_id
 		 WHERE fc.control_id = $1 ORDER BY cf.slug`, control)
 	require.NoError(t, err)

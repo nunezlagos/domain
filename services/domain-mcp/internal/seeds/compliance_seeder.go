@@ -90,7 +90,7 @@ func sembrarControles(ctx context.Context, tx pgx.Tx, rep *Report) error {
 func sembrarCrosswalk(ctx context.Context, tx pgx.Tx, rep *Report) error {
 	for _, x := range ComplianceCrosswalkSeeds() {
 		tag, err := tx.Exec(ctx, `
-			INSERT INTO framework_controls (framework_id, control_id, referencia)
+			INSERT INTO compliance_framework_controls (framework_id, control_id, referencia)
 			SELECT cf.id, cc.id, $3
 			FROM compliance_frameworks cf, compliance_controls cc
 			WHERE cf.slug = $1 AND cf.deleted_at IS NULL

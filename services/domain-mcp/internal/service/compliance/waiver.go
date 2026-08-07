@@ -26,7 +26,7 @@ type Waiver struct {
 	ControlSlug   string     `json:"control_slug"`
 	FrameworkSlug string     `json:"framework_slug"`
 	Razon         string     `json:"razon"`
-	OtorgadoPor   *uuid.UUID `json:"otorgado_por,omitempty"`
+	OtorgadoPor   *uuid.UUID `json:"otorgado_por_id,omitempty"`
 	OtorgadoAt    time.Time  `json:"otorgado_at"`
 	VenceAt       *time.Time `json:"vence_at,omitempty"`
 }
@@ -55,10 +55,10 @@ func (s *Service) OtorgarWaiver(ctx context.Context, projectID uuid.UUID,
 	var id uuid.UUID
 	err := s.q(ctx).QueryRow(ctx,
 		`INSERT INTO compliance_waivers
-		     (project_id, control_slug, framework_slug, razon, otorgado_por, vence_at, flow_run_id)
+		     (project_id, control_slug, framework_slug, razon, otorgado_por_id, vence_at, flow_run_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7)
 		 ON CONFLICT (project_id, control_slug, framework_slug) WHERE revocado_at IS NULL
-		 DO UPDATE SET razon = EXCLUDED.razon, otorgado_por = EXCLUDED.otorgado_por,
+		 DO UPDATE SET razon = EXCLUDED.razon, otorgado_por_id = EXCLUDED.otorgado_por_id,
 		               vence_at = EXCLUDED.vence_at, otorgado_at = NOW()
 		 RETURNING id`,
 		projectID, controlSlug, frameworkSlug, strings.TrimSpace(razon), actorID, venceAt, flowRunID).
@@ -74,7 +74,7 @@ func (s *Service) OtorgarWaiver(ctx context.Context, projectID uuid.UUID,
 func (s *Service) WaiversVigentes(ctx context.Context, projectID uuid.UUID, ahora time.Time,
 ) ([]Waiver, error) {
 	rows, err := s.q(ctx).Query(ctx,
-		`SELECT id, control_slug, framework_slug, razon, otorgado_por, otorgado_at, vence_at
+		`SELECT id, control_slug, framework_slug, razon, otorgado_por_id, otorgado_at, vence_at
 		 FROM compliance_waivers
 		 WHERE project_id = $1 AND revocado_at IS NULL
 		   AND (vence_at IS NULL OR vence_at > $2)

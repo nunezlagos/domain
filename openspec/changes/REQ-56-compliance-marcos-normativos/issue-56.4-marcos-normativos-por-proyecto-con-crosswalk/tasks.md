@@ -16,7 +16,7 @@ mal puesto (medido en DOMAINSERV-240).
 
 ## Implementación
 
-- [ ] Migración `000291`: `compliance_frameworks`, `compliance_controls`, `framework_controls`
+- [ ] Migración `000291`: `compliance_frameworks`, `compliance_controls`, `compliance_framework_controls`
       (catálogo, sin RLS) — header obligatorio, índices con `CONCURRENTLY` salvo justificación
 - [ ] Migración `000291` (cont.): `project_compliance_frameworks`, `project_control_status` con
       `ENABLE`/`FORCE ROW LEVEL SECURITY` + policy por `current_project_id()`

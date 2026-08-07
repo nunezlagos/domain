@@ -253,6 +253,7 @@ var validTablePrefixes = []string{
 	"platform_", "project_", "prompt_", "runner_", "sdd_", "seed_",
 	"skill_", "tdd_", "usage_", "users_", "webhook_",
 	"enrollment_", // enrollment_tokens (single-org; ver risks)
+	"compliance_", // marcos normativos, controles, crosswalk y waivers (REQ-56)
 }
 
 // Nombres canónicos RESUELTOS (allowlist del lint): nombre = grupo, excepción

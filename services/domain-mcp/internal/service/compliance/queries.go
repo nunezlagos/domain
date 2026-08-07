@@ -64,10 +64,10 @@ func (s *Service) DeclararMarco(ctx context.Context, projectID, frameworkID uuid
 	actorID *uuid.UUID, activo bool,
 ) error {
 	tag, err := s.q(ctx).Exec(ctx,
-		`INSERT INTO project_compliance_frameworks (project_id, framework_id, activo, activado_por)
+		`INSERT INTO project_compliance_frameworks (project_id, framework_id, activo, activado_por_id)
 		 VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (project_id, framework_id)
-		 DO UPDATE SET activo = EXCLUDED.activo, activado_por = EXCLUDED.activado_por,
+		 DO UPDATE SET activo = EXCLUDED.activo, activado_por_id = EXCLUDED.activado_por_id,
 		               activado_at = NOW()`,
 		projectID, frameworkID, activo, actorID)
 	if err != nil {
@@ -92,7 +92,7 @@ func (s *Service) ControlesExigidos(ctx context.Context, projectID uuid.UUID, ah
 		`SELECT cc.id, cc.slug, cc.nombre, cf.slug, fc.referencia, cf.obligatorio, cf.vigente_desde
 		 FROM project_compliance_frameworks pcf
 		 JOIN compliance_frameworks cf ON cf.id = pcf.framework_id AND cf.deleted_at IS NULL
-		 JOIN framework_controls fc ON fc.framework_id = cf.id
+		 JOIN compliance_framework_controls fc ON fc.framework_id = cf.id
 		 JOIN compliance_controls cc ON cc.id = fc.control_id AND cc.deleted_at IS NULL
 		 WHERE pcf.project_id = $1 AND pcf.activo
 		 ORDER BY cc.slug, cf.slug`, projectID)
@@ -125,11 +125,11 @@ func (s *Service) RegistrarEstado(ctx context.Context, projectID, controlID uuid
 	}
 	_, err := s.q(ctx).Exec(ctx,
 		`INSERT INTO project_control_status
-		     (project_id, control_id, estado, evidencia, evaluado_por)
+		     (project_id, control_id, estado, evidencia, evaluado_por_id)
 		 VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT (project_id, control_id)
 		 DO UPDATE SET estado = EXCLUDED.estado, evidencia = EXCLUDED.evidencia,
-		               evaluado_por = EXCLUDED.evaluado_por, evaluado_at = NOW()`,
+		               evaluado_por_id = EXCLUDED.evaluado_por_id, evaluado_at = NOW()`,
 		projectID, controlID, estado, evidencia, actorID)
 	if err != nil {
 		return fmt.Errorf("registrar estado: %w", err)

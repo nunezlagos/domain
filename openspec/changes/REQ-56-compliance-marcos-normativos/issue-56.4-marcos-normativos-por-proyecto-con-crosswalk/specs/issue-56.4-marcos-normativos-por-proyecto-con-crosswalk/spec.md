@@ -42,7 +42,7 @@ es la exclusión, al revés que el modelo de skills.
 ### REQ-2 — El sistema MUST propagar el estado de un control a todos los marcos que lo exigen
 
 #### Scenario: Un control satisface varios marcos a la vez
-- **Given** el control `cifrado-en-reposo` vinculado en `framework_controls` a `ley-21719`, `gdpr` e `iso-27001`
+- **Given** el control `cifrado-en-reposo` vinculado en `compliance_framework_controls` a `ley-21719`, `gdpr` e `iso-27001`
 - **And** un proyecto afecto a `ley-21719` y `gdpr`
 - **When** se registra `project_control_status` de `cifrado-en-reposo` en estado `ok`
 - **Then** el reporte de `ley-21719` muestra ese control como cumplido

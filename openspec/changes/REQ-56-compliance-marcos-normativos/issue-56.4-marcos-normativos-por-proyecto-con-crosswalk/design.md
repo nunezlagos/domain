@@ -23,20 +23,20 @@ compliance_controls
   id, slug              'cifrado-en-reposo'
   nombre, descripcion, como_se_verifica
 
-framework_controls      -- EL CROSSWALK
+compliance_framework_controls      -- EL CROSSWALK
   framework_id, control_id
   referencia            'Art. 32' | 'A.8.24'
   UNIQUE (framework_id, control_id)
 
 -- POR PROYECTO — CON RLS por app.current_project_id
 project_compliance_frameworks     -- el opt-in: SIN FILA = NO APLICA
-  project_id, framework_id, activo, activado_por, activado_at
+  project_id, framework_id, activo, activado_por_id, activado_at
   UNIQUE (project_id, framework_id)
 
 project_control_status
   project_id, control_id
   estado                ok | parcial | falta | no_verificable
-  evidencia, evaluado_at, evaluado_por
+  evidencia, evaluado_at, evaluado_por_id
   UNIQUE (project_id, control_id)
 ```
 
@@ -51,7 +51,7 @@ Sirve para prototipar, no para sostener el crosswalk.
 ### B. Catálogo + puente, sin controles — descartada al ampliar a ISO
 Dos tablas (`compliance_frameworks` + `project_compliance_frameworks`) resuelven el opt-in y lo
 internacional. Alcanzaba mientras el alcance eran solo leyes chilenas. Al entrar ISO 27001 dejó de
-alcanzar: sin `framework_controls`, cada uno de los ~90 controles del Anexo A se escribe y audita
+alcanzar: sin `compliance_framework_controls`, cada uno de los ~90 controles del Anexo A se escribe y audita
 por separado en cada marco que lo exige.
 
 ### C. Invertir el modelo de skills (`requires_optin` en `skills`) — descartada como solución principal
@@ -75,7 +75,7 @@ skill compliance-cl (motor, 6 fases)
   Fase 4 estado      → el crosswalk expande el estado a cada marco
   Fase 5 construir   → brechas como domain_ticket_create
 
-reporte por marco = project_control_status ⋈ framework_controls ⋈ compliance_frameworks
+reporte por marco = project_control_status ⋈ compliance_framework_controls ⋈ compliance_frameworks
 ```
 
 El punto de enganche es el **bootstrap de sesión**: es donde hoy se resuelve qué aplica al proyecto.

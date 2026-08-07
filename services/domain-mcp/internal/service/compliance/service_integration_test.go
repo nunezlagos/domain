@@ -30,7 +30,7 @@ func (f *fixture) vincularControl(t *testing.T, marco uuid.UUID, slugControl, re
 		 RETURNING id`, slugControl).Scan(&control)
 	require.NoError(t, err)
 	_, err = f.pools.App.Exec(ctx,
-		`INSERT INTO framework_controls (framework_id, control_id, referencia) VALUES ($1,$2,$3)
+		`INSERT INTO compliance_framework_controls (framework_id, control_id, referencia) VALUES ($1,$2,$3)
 		 ON CONFLICT (framework_id, control_id) DO UPDATE SET referencia = EXCLUDED.referencia`,
 		marco, control, referencia)
 	require.NoError(t, err)

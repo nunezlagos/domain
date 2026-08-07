@@ -3,7 +3,7 @@
 //
 // Dos mitades con reglas de acceso distintas, y esa división es el diseño:
 //
-//   - CATÁLOGO (compliance_frameworks, compliance_controls, framework_controls): global a la
+//   - CATÁLOGO (compliance_frameworks, compliance_controls, compliance_framework_controls): global a la
 //     instancia, sin RLS. Qué ES la Ley 21.719 no depende del proyecto que la mire.
 //   - POR PROYECTO (project_compliance_frameworks, project_control_status): bajo RLS por
 //     app.current_project_id. A qué está afecto un proyecto es información suya.

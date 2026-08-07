@@ -6,6 +6,6 @@
 
 DROP TABLE IF EXISTS project_control_status CASCADE;
 DROP TABLE IF EXISTS project_compliance_frameworks CASCADE;
-DROP TABLE IF EXISTS framework_controls CASCADE;
+DROP TABLE IF EXISTS compliance_framework_controls CASCADE;
 DROP TABLE IF EXISTS compliance_controls CASCADE;
 DROP TABLE IF EXISTS compliance_frameworks CASCADE;

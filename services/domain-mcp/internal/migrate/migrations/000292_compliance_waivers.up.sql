@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS compliance_waivers (
   framework_slug VARCHAR(100) NOT NULL,
   -- un waiver sin razón escrita es un bypass con otro nombre
   razon        TEXT NOT NULL CHECK (length(btrim(razon)) >= 10),
-  otorgado_por UUID REFERENCES users(id) ON DELETE SET NULL,
+  otorgado_por_id UUID REFERENCES users(id) ON DELETE SET NULL,
   otorgado_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- vencimiento opcional: un waiver "hasta que se implemente" no debería ser eterno, pero
   -- forzar una fecha llevaría a poner una cualquiera

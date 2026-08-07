@@ -18,7 +18,7 @@
 --
 -- LAS DOS MITADES TIENEN REGLAS DE ACCESO DISTINTAS, Y ESO ES EL PUNTO DEL DISEÑO:
 --
---   CATÁLOGO (compliance_frameworks, compliance_controls, framework_controls) — SIN RLS.
+--   CATÁLOGO (compliance_frameworks, compliance_controls, compliance_framework_controls) — SIN RLS.
 --   Qué ES la Ley 21.719 no depende del proyecto que la mire. Ponerlo bajo RLS haría que las
 --   consultas devolvieran CERO FILAS SIN ERROR y el sistema parecería no tener marcos cargados —
 --   el mismo modo de falla que la 000287 con knowledge_chunks y la 000288 con webhooks, donde el
@@ -95,7 +95,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS compliance_controls_slug_uniq
 -- Ley 21.719 (deber de seguridad), el GDPR (Art. 32), ISO 27001 (Anexo A) y SOC 2. Sin esta tabla
 -- ese control se escribe, implementa y audita CUATRO veces; con ella se evalúa una vez y el
 -- resultado se reporta contra cada marco con SU propia referencia de artículo o cláusula.
-CREATE TABLE IF NOT EXISTS framework_controls (
+CREATE TABLE IF NOT EXISTS compliance_framework_controls (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   framework_id UUID NOT NULL REFERENCES compliance_frameworks(id) ON DELETE CASCADE,
   control_id   UUID NOT NULL REFERENCES compliance_controls(id) ON DELETE CASCADE,
@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS framework_controls (
 );
 
 -- domain-lint-ignore-next: require-concurrent-index
-CREATE INDEX IF NOT EXISTS framework_controls_control_idx ON framework_controls (control_id);
+CREATE INDEX IF NOT EXISTS compliance_framework_controls_control_idx ON compliance_framework_controls (control_id);
 
 -- ---------------------------------------------------------------------------
 -- POR PROYECTO — con RLS por app.current_project_id
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS project_compliance_frameworks (
   project_id   UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   framework_id UUID NOT NULL REFERENCES compliance_frameworks(id) ON DELETE CASCADE,
   activo       BOOLEAN NOT NULL DEFAULT TRUE,
-  activado_por UUID REFERENCES users(id) ON DELETE SET NULL,
+  activado_por_id UUID REFERENCES users(id) ON DELETE SET NULL,
   activado_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (project_id, framework_id)
 );
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS project_control_status (
   estado       TEXT NOT NULL CHECK (estado IN ('ok', 'parcial', 'falta', 'no_verificable')),
   evidencia    TEXT,
   evaluado_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  evaluado_por UUID REFERENCES users(id) ON DELETE SET NULL,
+  evaluado_por_id UUID REFERENCES users(id) ON DELETE SET NULL,
   UNIQUE (project_id, control_id)
 );
 

@@ -12,7 +12,18 @@
 
 BIN := domain-install
 DIST := dist
-LDFLAGS := -s -w  # strip symbols + dwarf → binarios ~40% más chicos
+
+# VERSION sale del tag si hay uno; si no, el binario se declara build de desarrollo. Un
+# default con forma de semver haría que el hook SessionStart lo compare contra el server y
+# le avise "estás viejo" a quien está compilando el repo (issue-57.1, REQ-1).
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo dev)
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+LDFLAGS := -s -w \
+  -X main.Version=$(VERSION) \
+  -X main.Commit=$(COMMIT) \
+  -X main.BuildTime=$(BUILD_TIME)
 
 .PHONY: all dist clean install fmt vet test
 

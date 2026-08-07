@@ -52,11 +52,31 @@ type bootstrapProjectRepos interface {
 }
 
 type sessionBootstrapHandlers struct {
-	policies     bootstrapPoliciesLister
-	projects     bootstrapProjectsService
-	projectRepos bootstrapProjectRepos
-	pool         *pgxpool.Pool
-	principal    *apikey.Principal
+	policies      bootstrapPoliciesLister
+	projects      bootstrapProjectsService
+	projectRepos  bootstrapProjectRepos
+	pool          *pgxpool.Pool
+	principal     *apikey.Principal
+	serverVersion string
+}
+
+// versionMinimaDeCliente: piso de compatibilidad que el server declara (REQ-6 de issue-57.1).
+// Vacío significa "sin piso declarado" y es el estado honesto hasta que la fase 4 lo defina:
+// hoy no hay ninguna release publicada con versión inyectada, así que cualquier número acá
+// dejaría fuera de soporte a clientes que funcionan.
+const versionMinimaDeCliente = ""
+
+// infoDeVersionDelServer viaja en el bootstrap porque el hook SessionStart ya hace ese
+// round-trip en cada arranque: agregar la versión ahí no cuesta una llamada nueva.
+//
+// Un server sin versión inyectada devuelve el campo VACÍO en vez de un default con forma de
+// número. El cliente descarta lo que no puede ordenar, así que vacío degrada a "sin aviso" —
+// mientras que un "0.0.0" lo haría avisar que hay que actualizar a una versión inexistente.
+func (h *sessionBootstrapHandlers) infoDeVersionDelServer() map[string]any {
+	return map[string]any{
+		"version":            h.serverVersion,
+		"min_client_version": versionMinimaDeCliente,
+	}
 }
 
 func (h *sessionBootstrapHandlers) q(ctx context.Context) interface {
@@ -72,11 +92,12 @@ func (h *sessionBootstrapHandlers) q(ctx context.Context) interface {
 
 func registerSessionBootstrapTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTool {
 	h := &sessionBootstrapHandlers{
-		policies:     deps.Policies,
-		projects:     deps.Projects,
-		projectRepos: deps.ProjectRepos,
-		pool:         deps.Pool,
-		principal:    deps.Principal,
+		policies:      deps.Policies,
+		projects:      deps.Projects,
+		projectRepos:  deps.ProjectRepos,
+		pool:          deps.Pool,
+		principal:     deps.Principal,
+		serverVersion: deps.ServerVer,
 	}
 	rls := func(fn mcpgo.ToolHandlerFunc) mcpgo.ToolHandlerFunc {
 		return withOrgTxHandler(&deps, fn)
@@ -463,6 +484,8 @@ func (h *sessionBootstrapHandlers) handleSessionBootstrap(ctx context.Context, r
 		// El client decide si correr domain_code_build; no se dispara acá.
 		"code_graph": codeGraph,
 		"next_step":  nextStep,
+		// issue-57.1 REQ-2: con qué compararse el cliente para saber si quedó atrás.
+		"server": h.infoDeVersionDelServer(),
 	})
 }
 

@@ -45,17 +45,25 @@ jobs:
           # Sin go.sum porque el módulo install-user es stdlib-only
           cache: false
 
+      # issue-57.1 REQ-1: los binarios que la gente descarga son justamente los que hay que
+      # comparar contra el server. Sin -X salen sin versión y el aviso de actualización no
+      # tiene con qué comparar. workflow_dispatch no corre sobre un tag, así que ahí la
+      # versión queda como build de desarrollo en vez de fingir un número de release.
       - name: Build domain-install (${{ matrix.os }}/${{ matrix.arch }})
         env:
           CGO_ENABLED: '0'
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p dist
           ext=""
           if [ "${{ matrix.os }}" = "windows" ]; then ext=".exe"; fi
           out="dist/domain-install-${{ matrix.os }}-${{ matrix.arch }}${ext}"
-          go build -ldflags "-s -w" -o "$out" .
+          version="dev"
+          case "$GITHUB_REF_NAME" in v*) version="$GITHUB_REF_NAME" ;; esac
+          go build -ldflags "-s -w -X main.Version=$version -X main.Commit=${GITHUB_SHA::7} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o "$out" .
+          "$out" --version 2>/dev/null || true
           ls -lh "$out"
 
       - name: Upload artifact

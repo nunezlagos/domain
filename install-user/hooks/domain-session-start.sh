@@ -201,6 +201,35 @@ except: pass
 [ -z "$mem_slug" ] && mem_slug=$(basename "$cwd" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-')
 [ -z "$mem_slug" ] && mem_slug="domain-services"
 
+# ---------- 5a-bis. aviso de actualización del cliente (issue-57.1, REQ-3) ----------
+# Tres artefactos —server, cliente y release— se mueven por separado y nada detectaba cuando
+# divergían. La comparación NO se hace acá: la resuelve `domain-install --version-check`, que
+# está testeado como función pura. Duplicar la regla en python la dejaría sin tests y las dos
+# copias divergirían.
+#
+# Todo este bloque es best-effort y NUNCA bloquea: sin binario en el PATH, sin versión del
+# server o con un formato que no se puede ordenar, version_notice queda vacío y la sesión
+# arranca exactamente como antes de este cambio.
+version_notice=""
+if command -v domain-install >/dev/null 2>&1; then
+  server_vers=$(printf '%s' "$bootstrap_out" | python3 -c "
+import sys, json
+try:
+    d = json.loads(sys.stdin.read())
+    for c in d.get('result', {}).get('content', []):
+        try:
+            s = json.loads(c.get('text', '')).get('server', {})
+            print(s.get('version', ''))
+            print(s.get('min_client_version', ''))
+            break
+        except: pass
+except: pass
+" 2>/dev/null)
+  version_notice=$(domain-install --version-check \
+    "$(printf '%s' "$server_vers" | sed -n 1p)" \
+    "$(printf '%s' "$server_vers" | sed -n 2p)" 2>/dev/null || true)
+fi
+
 # code graph RETIRADO (2026-07-07): la pre-carga de domain_code_graph y el
 # auto-rebuild en session-start se eliminaron tras la auditoría de uso:
 # ~450 llamadas automáticas vs ~14 con intención (8 fallidas) en 7 días,
@@ -263,6 +292,7 @@ export HOOK_POLICY_OUT="$policy_out"
 # encabezado; el bloque de REGLAS DE ARRANQUE nunca se recorta.
 export HOOK_CTX_MAX_BYTES="${DOMAIN_CTX_MAX_BYTES:-12000}"
 export HOOK_SOURCE="$hook_source"
+export HOOK_VERSION_NOTICE="$version_notice"
 
 python3 - <<'PYEOF'
 import json, os
@@ -386,10 +416,16 @@ _bootstrap = _cap(os.environ.get('HOOK_BOOTSTRAP_OUT',''), int(max_bytes * 0.50)
 _memctx    = _cap(os.environ.get('HOOK_MEM_OUT',''),        int(max_bytes * 0.30))
 _skpol     = _cap(_skills_policies_block(),                 int(max_bytes * 0.20))
 
+# issue-57.1 REQ-3: el aviso NO pasa por _cap. Es una línea, es lo único accionable del
+# bloque, y recortarla lo dejaría diciendo que hay que actualizar sin decir a qué ni cómo.
+_version_notice = os.environ.get('HOOK_VERSION_NOTICE', '').strip()
+_aviso = f"{_version_notice}\n\n" if _version_notice else ""
+
 ctx = (
     f"🟢 domain MCP ready (auto-cargado por SessionStart hook, "
     f"vps={os.environ.get('HOOK_VPS_URL','?')}, "
     f"slug={os.environ.get('HOOK_MEM_SLUG','?')})\n\n"
+    f"{_aviso}"
     f"## domain_session_bootstrap\n{_bootstrap}\n\n"
     f"## domain_mem_context (ultimas 10 obs)\n{_memctx}\n\n"
     f"{_skpol}\n\n"

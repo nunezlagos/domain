@@ -4,19 +4,21 @@ Seis fases entregables por separado. Las 0-1 dan el 80% del valor y son casi gra
 
 ## Fase 0 — Versión (habilitante, sin ella nada de lo demás es posible)
 
-- [ ] Test: un binario compilado con `-X` reporta su versión y su commit (REQ-1)
-- [ ] Test: un build local sin tag se identifica como desarrollo y NO finge ser release (REQ-1)
-- [ ] `install-user/Makefile`: agregar `-X` al `LDFLAGS`, que hoy es solo `-s -w`
-- [ ] `release-installer.yml`: pasar el tag como versión en el build de los 5 targets
-- [ ] Exponer versión del server + versión mínima de cliente en `domain_session_bootstrap` (REQ-2)
+- [x] Test: un binario compilado con `-X` reporta su versión y su commit (REQ-1)
+- [x] Test: un build local sin tag se identifica como desarrollo y NO finge ser release (REQ-1)
+- [x] `install-user/Makefile`: agregar `-X` al `LDFLAGS`, que hoy es solo `-s -w`
+- [x] `release-installer.yml`: pasar el tag como versión en el build de los 5 targets
+- [x] Exponer versión del server + versión mínima de cliente en `domain_session_bootstrap` (REQ-2)
+  — `min_client_version` va vacío ("sin piso declarado") hasta que la fase 4 lo defina
 
 ## Fase 1 — Aviso (el 80% del valor)
 
-- [ ] Test: comparación de versiones como **función pura** — mayor, igual, menor, y formatos raros
-- [ ] Test: cliente viejo → el bloque de inicio trae el aviso y el comando (REQ-3)
-- [ ] Test: cliente al día → sin línea de aviso (REQ-3)
-- [ ] Test: server caído → la sesión arranca igual, sin aviso y sin romper (REQ-3)
-- [ ] `hooks/domain-session-start.sh`: comparar y agregar la línea al bloque
+- [x] Test: comparación de versiones como **función pura** — mayor, igual, menor, y formatos raros
+- [x] Test: cliente viejo → el bloque de inicio trae el aviso y el comando (REQ-3)
+- [x] Test: cliente al día → sin línea de aviso (REQ-3)
+- [x] Test: server caído → la sesión arranca igual, sin aviso y sin romper (REQ-3)
+- [x] `hooks/domain-session-start.sh`: comparar y agregar la línea al bloque
+  — la comparación NO se duplica en el hook: invoca `domain-install --version-check`
 
 ## Fase 2 — Distribución sin Git ni Go
 

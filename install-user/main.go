@@ -82,6 +82,8 @@ func main() {
 		keepLocalRules  bool
 		removeEngram    bool
 		check           bool
+		showVersion     bool
+		versionCheck    bool
 	)
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
@@ -100,8 +102,25 @@ func main() {
 		"Deshabilita el plugin engram si está activo (sistema de memoria legacy, reemplazado por domain)")
 	flag.BoolVar(&check, "check", false,
 		"Self-check (doctor): valida hooks, permisos, instrucciones y salud del MCP. No instala nada")
+	flag.BoolVar(&showVersion, "version", false,
+		"Imprime la versión del binario y termina. El hook SessionStart la usa para avisar si quedó viejo")
+	flag.BoolVar(&versionCheck, "version-check", false,
+		"Uso interno del hook SessionStart: --version-check <version_del_server> [version_minima]. "+
+			"Imprime la línea de aviso si el cliente quedó atrás, o nada. NUNCA falla")
 	flag.Usage = printHelp
 	flag.Parse()
+
+	// Antes que doctor: el hook lo invoca en cada arranque de sesión y no puede pagar el
+	// costo ni los efectos de ninguna otra ruta.
+	if showVersion || flag.Arg(0) == "version" {
+		fmt.Println(VersionInfo())
+		return
+	}
+
+	if versionCheck {
+		imprimirAvisoDeActualizacion(flag.Arg(0), flag.Arg(1))
+		return
+	}
 
 	// Subcomando 'doctor' equivalente a --check (no corre la instalación).
 	if check || flag.Arg(0) == "doctor" {

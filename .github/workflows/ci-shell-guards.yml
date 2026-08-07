@@ -20,6 +20,7 @@ on:
     paths:
       - 'scripts/**'
       - 'services/scripts/**'
+      - 'services/systemd/**'
       - 'services/caddy/**'
       - 'services/domain-mcp/deploy/monitoring/**'
       - '.github/workflows/ci-shell-guards.yml'
@@ -27,6 +28,7 @@ on:
     paths:
       - 'scripts/**'
       - 'services/scripts/**'
+      - 'services/systemd/**'
       - 'services/caddy/**'
       - 'services/domain-mcp/deploy/monitoring/**'
       - '.github/workflows/ci-shell-guards.yml'
@@ -58,6 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           esperadas=$(cat <<'EOF'
+          scripts/tests/test_auto_deploy_check.sh
           scripts/tests/test_deploy.sh
           scripts/tests/test_orchestrator.sh
           scripts/tests/test_path_filters.sh
@@ -95,11 +98,12 @@ jobs:
             exit 1
           fi
 
-      - name: Correr las 11 suites
+      - name: Correr las 12 suites
         run: |
           set -uo pipefail
           fallidas=""
           for s in \
+            scripts/tests/test_auto_deploy_check.sh \
             scripts/tests/test_deploy.sh \
             scripts/tests/test_orchestrator.sh \
             scripts/tests/test_path_filters.sh \

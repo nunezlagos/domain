@@ -41,12 +41,21 @@ Seis fases entregables por separado. Las 0-1 dan el 80% del valor y son casi gra
 
 ## Fase 5 — Auto-deploy del VPS
 
-- [ ] Script de verificación: último tag `v*` del remoto vs. SHA desplegado (REQ-5)
-- [ ] Test: sin tag nuevo no se ejecuta deploy ni se reinicia nada (REQ-5)
-- [ ] Test: commits en `main` sin tag NO despliegan (REQ-5)
-- [ ] Guard de concurrencia: dos ciclos no se pisan (REQ-5)
-- [ ] Instalación del cron en el VPS, documentada
+- [x] Script de verificación: último tag `v*` del remoto vs. SHA desplegado (REQ-5)
+  — `scripts/auto-deploy-check.sh`; compara el commit del tag, no el nombre, así que
+    "todavía no hay ningún tag desplegado" deja de ser un caso especial
+- [x] Test: sin tag nuevo no se ejecuta deploy ni se reinicia nada (REQ-5)
+- [x] Test: commits en `main` sin tag NO despliegan (REQ-5)
+  — dos casos: el tag ya desplegado con main adelantado, y un tag NUEVO que main pasó
+    de largo. Solo el segundo justifica comparar contra `origin/main`
+- [x] Guard de concurrencia: dos ciclos no se pisan (REQ-5)
+  — `flock` sobre `.git/auto-deploy.lock`: el lock es del checkout, no de la máquina
+- [x] Instalación del timer en el VPS, documentada
+  — `systemd/domain-auto-deploy.{service,timer}`; queda instalado e INACTIVO, con un
+    test que verifica que `install.sh` no lo encienda solo
 - [ ] Verificar que el rollback de `scripts/deploy.sh` se dispara ante un tag que falla (REQ-5)
+  — el decisor propaga el exit code (probado); el rollback en sí es del trap de
+    `deploy.sh` y solo se puede medir en un deploy real
 
 ## Verify (auditoría — última task)
 

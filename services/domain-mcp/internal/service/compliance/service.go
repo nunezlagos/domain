@@ -27,8 +27,9 @@ import (
 )
 
 var (
-	ErrMarcoNoEncontrado = errors.New("marco normativo no encontrado")
-	ErrEstadoInvalido    = errors.New("estado debe ser ok|parcial|falta|no_verificable")
+	ErrMarcoNoEncontrado   = errors.New("marco normativo no encontrado")
+	ErrControlNoEncontrado = errors.New("control no encontrado en el catálogo")
+	ErrEstadoInvalido      = errors.New("estado debe ser ok|parcial|falta|no_verificable")
 	// ErrFuenteNoRedistribuible protege de ingestar el texto de una norma de pago. Las leyes son
 	// públicas; el articulado de ISO/IEC no se puede redistribuir ni en un repo privado.
 	ErrFuenteNoRedistribuible = errors.New(

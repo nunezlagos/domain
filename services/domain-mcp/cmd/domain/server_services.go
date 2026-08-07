@@ -47,6 +47,7 @@ import (
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
+	compliancesvc "nunezlagos/domain/internal/service/compliance"
 	cronsvc "nunezlagos/domain/internal/service/cron"
 	feedbacksvc "nunezlagos/domain/internal/service/feedback"
 	"nunezlagos/domain/internal/service/flow"
@@ -120,6 +121,7 @@ type serverServices struct {
 	BillingService         *billing.Service
 	OutboundWebhookService *outboundwebhook.Service
 	InboundWebhookService  *webhooksvc.Service
+	ComplianceService      *compliancesvc.Service
 	OutboundDispatcher     *outboundwebhook.Dispatcher
 	OutboundRequireTLS     bool
 	LLMFactory             *llm.Factory
@@ -258,6 +260,9 @@ func buildServices(
 	}
 
 	s.OutboundWebhookService = &outboundwebhook.Service{Pool: pools.App, Cipher: s.MasterCipher}
+	// fuera del if del cipher: compliance no cifra nada, así que no tiene por qué quedar sin
+	// construir cuando falta DOMAIN_MASTER_KEY
+	s.ComplianceService = &compliancesvc.Service{Pool: pools.App}
 	if s.MasterCipher != nil {
 		// PoolPublic = pools.Auth (app_admin, BYPASSRLS) solo para el camino de recepción:
 		// /receive es público y conoce únicamente el slug, así que no tiene proyecto con el

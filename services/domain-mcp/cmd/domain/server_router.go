@@ -197,6 +197,7 @@ func buildRouter(
 			AgentRunner:      s.AgentRunnerInst,
 			Crons:            s.CronService,
 			InboundWebhooks:  s.InboundWebhookService,
+			Compliance:       s.ComplianceService,
 			Clients:          s.ClientService,
 			CapturedPrompts:  s.CapturedPromptService,
 			ProjectRepos:     s.ProjectRepoService,

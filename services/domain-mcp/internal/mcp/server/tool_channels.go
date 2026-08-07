@@ -65,6 +65,11 @@ var toolChannel = map[string]ToolChannel{
 	// domain_code_* retiradas del manifest (DOMAINSERV-54): ocultas por default,
 	// sin canal. Re-exponibles con DOMAIN_EXPOSE_CODE_TOOLS (ver code_graph_tools.go).
 
+	"domain_compliance_catalog":     ChannelUserIntent,
+	"domain_compliance_control_set": ChannelUserIntent,
+	"domain_compliance_project_set": ChannelUserIntent,
+	"domain_compliance_report":      ChannelUserIntent,
+
 	"domain_context_snapshot": ChannelPolicyTriggered, // re-hidratación post-compactación
 
 	"domain_cron_create":      ChannelUserIntent,

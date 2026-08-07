@@ -160,6 +160,22 @@ func (s *Service) BuscarPorSlug(ctx context.Context, slug, edicion string) (*Fra
 	return &marcos[0], nil
 }
 
+// BuscarControlPorSlug resuelve un control del catálogo. Devuelve ErrControlNoEncontrado en vez de
+// un uuid.Nil silencioso: escribir el estado de un control inexistente dejaría una fila que no
+// aparece en ningún reporte.
+func (s *Service) BuscarControlPorSlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := s.q(ctx).QueryRow(ctx,
+		`SELECT id FROM compliance_controls WHERE slug = $1 AND deleted_at IS NULL`, slug).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, ErrControlNoEncontrado
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("buscar control: %w", err)
+	}
+	return id, nil
+}
+
 // GuardDeFuente rechaza ingestar el texto completo de un marco no redistribuible. Es el punto
 // donde el campo fuente_tipo deja de ser metadata y se vuelve un guard.
 func (s *Service) GuardDeFuente(f Framework) error {

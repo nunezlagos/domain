@@ -33,8 +33,8 @@ import (
 	capturedpromptsvc "nunezlagos/domain/internal/service/capturedprompt"
 	clientsvc "nunezlagos/domain/internal/service/client"
 	codegraphsvc "nunezlagos/domain/internal/service/codegraph"
+	compliancesvc "nunezlagos/domain/internal/service/compliance"
 	cronsvc "nunezlagos/domain/internal/service/cron"
-	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	syncsvc "nunezlagos/domain/internal/service/extsync"
 	flowsvc "nunezlagos/domain/internal/service/flow"
 	intakesvc "nunezlagos/domain/internal/service/intake"
@@ -55,6 +55,7 @@ import (
 	tasksvc "nunezlagos/domain/internal/service/task"
 	ticketsvc "nunezlagos/domain/internal/service/ticket"
 	timelinesvc "nunezlagos/domain/internal/service/timeline"
+	webhooksvc "nunezlagos/domain/internal/service/webhook"
 	"nunezlagos/domain/internal/service/workflowimport"
 )
 
@@ -74,6 +75,7 @@ type Deps struct {
 	AgentRunner      *agentrunner.Runner
 	Crons            *cronsvc.Service           // issue-12.3 domain_cron_list
 	InboundWebhooks  *webhooksvc.Service        // DOMAINSERV-240 domain_webhook_* — el camino de alta que la feature no tenía
+	Compliance       *compliancesvc.Service     // issue-56.4 domain_compliance_* — marcos normativos por proyecto
 	Clients          *clientsvc.Service         // clients/mandantes — consultoras gestionan proyectos por cliente
 	CapturedPrompts  *capturedpromptsvc.Service // REQ-41 captura raw_text de usuario
 	ProjectRepos     *projectreposvc.Service    // REQ-42 multi-remotos por proyecto
@@ -140,6 +142,7 @@ var toolGroups = []toolRegistrar{
 	registerWorkflowTraceTools,
 	registerErrorReportingTools,
 	registerWebhookTools,
+	registerComplianceTools,
 }
 
 // defaultBudget rate limit conservador para todas las tools (issue-12.6).

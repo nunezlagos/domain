@@ -30,6 +30,8 @@ type complianceService interface {
 	RegistrarEstado(ctx context.Context, projectID, controlID uuid.UUID, estado, evidencia string, actorID *uuid.UUID) error
 	BuscarPorSlug(ctx context.Context, slug, edicion string) (*compliancesvc.Framework, error)
 	BuscarControlPorSlug(ctx context.Context, slug string) (uuid.UUID, error)
+	OtorgarWaiver(ctx context.Context, projectID uuid.UUID, controlSlug, frameworkSlug, razon string, actorID *uuid.UUID, venceAt *time.Time, flowRunID *uuid.UUID) (uuid.UUID, error)
+	WaiversVigentes(ctx context.Context, projectID uuid.UUID, ahora time.Time) ([]compliancesvc.Waiver, error)
 }
 
 type complianceHandlers struct {
@@ -54,6 +56,7 @@ func registerComplianceTools(wrap *ResilientWrapper, deps Deps) []mcpgo.ServerTo
 		{Tool: toolComplianceProjectSet(), Handler: wrap.Wrap("domain_compliance_project_set", rlsProyecto(h.handleProjectSet))},
 		{Tool: toolComplianceReport(), Handler: wrap.Wrap("domain_compliance_report", rlsProyecto(h.handleReport))},
 		{Tool: toolComplianceControlSet(), Handler: wrap.Wrap("domain_compliance_control_set", rlsProyecto(h.handleControlSet))},
+		{Tool: toolComplianceWaiver(), Handler: wrap.Wrap("domain_compliance_waiver", rlsProyecto(h.handleWaiver))},
 	}
 }
 
@@ -229,4 +232,36 @@ func proyectarControles(controles []compliancesvc.ControlExigido) []map[string]a
 		}
 	}
 	return out
+}
+
+func toolComplianceWaiver() mcp.Tool {
+	return mcp.NewTool("domain_compliance_waiver",
+		mcp.WithDescription("Otorga una excepcion sobre una obligacion concreta para destrabar un BLOCKER de la fase sdd-compliance. Exige RAZON ESCRITA de al menos 10 caracteres: un waiver sin razon es un bypass con otro nombre. Queda auditado en la base con quien lo otorgo y cuando, no en un archivo local. El hallazgo NO desaparece del reporte: sigue apareciendo, con su waiver."),
+		mcp.WithString("project_slug", mcp.Description("Proyecto que otorga la excepcion"), mcp.Required()),
+		mcp.WithString("control_slug", mcp.Description("Control cuya obligacion se exceptua"), mcp.Required()),
+		mcp.WithString("framework_slug", mcp.Description("Marco que exige ese control"), mcp.Required()),
+		mcp.WithString("razon", mcp.Description("Por que se acepta avanzar sin cumplir. Minimo 10 caracteres; es lo que hace auditable la decision"), mcp.Required()),
+	)
+}
+
+func (h *complianceHandlers) handleWaiver(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if h.compliance == nil || h.principal == nil {
+		return mcp.NewToolResultError("compliance service no configurado"), nil
+	}
+	orgID, _ := uuid.Parse(h.principal.OrganizationID)
+	projectID, err := h.projectID(ctx, orgID, argString(req, "project_slug"))
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("project_slug: %v", err)), nil
+	}
+	userID, _ := uuid.Parse(h.principal.UserID)
+	id, err := h.compliance.OtorgarWaiver(ctx, projectID, argString(req, "control_slug"),
+		argString(req, "framework_slug"), argString(req, "razon"), &userID, nil, nil)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("waiver: %v", err)), nil
+	}
+	return toolResultJSON(map[string]any{
+		"waiver_id":    id.String(),
+		"control_slug": argString(req, "control_slug"),
+		"auditado":     true,
+	})
 }

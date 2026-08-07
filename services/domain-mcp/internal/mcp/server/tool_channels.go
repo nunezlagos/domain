@@ -69,6 +69,7 @@ var toolChannel = map[string]ToolChannel{
 	"domain_compliance_control_set": ChannelUserIntent,
 	"domain_compliance_project_set": ChannelUserIntent,
 	"domain_compliance_report":      ChannelUserIntent,
+	"domain_compliance_waiver":      ChannelUserIntent,
 
 	"domain_context_snapshot": ChannelPolicyTriggered, // re-hidratación post-compactación
 

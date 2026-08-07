@@ -351,6 +351,7 @@ func runServer() {
 	seedRegistry.Register(&seeds.ProjectTemplatesSeeder{})
 	seedRegistry.Register(&seeds.MCPProvidersSeeder{})
 	seedRegistry.Register(&seeds.KnownErrorsSeeder{})
+	seedRegistry.Register(&seeds.ComplianceCatalogSeeder{})
 	seedRegistry.Register(&seeds.SkillsCatalogSeeder{})
 	seedRegistry.Register(&seeds.AgentTemplatesCatalogSeeder{})
 	seedRegistry.Register(&seeds.FlowsCatalogSeeder{})

@@ -28,6 +28,15 @@ const (
 	// Hoy actualizar el cliente es re-correr el instalador, que clona y compila
 	// (INSTALL.md:72). La fase 3 de REQ-57 lo reemplaza por un comando de un paso.
 	comandoDeActualizacion = "./install-user/bootstrap.sh"
+
+	// marcadorDelAviso es lo que el hook exige para pegar una línea al bloque de arranque, y
+	// existe por un modo de falla concreto: `flag.Usage = printHelp` y printHelp escribe a
+	// STDOUT, así que un binario VIEJO —o sea todos los ya instalados el día que esto se
+	// despliegue— responde a --version-check imprimiendo su help entero por la misma salida de
+	// la que el hook lee. Sin filtro, esas ~30 líneas se inyectan en cada sesión.
+	//
+	// Arreglar printHelp no alcanza: los binarios viejos no se pueden cambiar retroactivamente.
+	marcadorDelAviso = "domain: "
 )
 
 func VersionInfo() string {

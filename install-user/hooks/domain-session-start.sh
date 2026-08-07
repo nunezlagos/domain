@@ -225,9 +225,14 @@ try:
         except: pass
 except: pass
 " 2>/dev/null)
+  # El grep NO es defensivo de más: `flag.Usage = printHelp` y printHelp escribe a STDOUT, asi
+  # que un binario VIEJO —todos los instalados hoy— responde al flag desconocido imprimiendo su
+  # help entero por la misma salida de la que leemos. Sin el filtro, esas ~30 lineas se pegan al
+  # bloque de arranque de cada sesion. Se toma UNA linea y solo si lleva el marcador del aviso.
   version_notice=$(domain-install --version-check \
     "$(printf '%s' "$server_vers" | sed -n 1p)" \
-    "$(printf '%s' "$server_vers" | sed -n 2p)" 2>/dev/null || true)
+    "$(printf '%s' "$server_vers" | sed -n 2p)" 2>/dev/null \
+    | grep -m1 -- 'domain: ' || true)
 fi
 
 # code graph RETIRADO (2026-07-07): la pre-carga de domain_code_graph y el

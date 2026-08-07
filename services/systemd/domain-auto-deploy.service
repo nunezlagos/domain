@@ -1,0 +1,16 @@
+[Unit]
+Description=domain-services — auto-deploy del último tag v* publicado
+Requires=docker.service
+After=docker.service domain-services.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/services
+EnvironmentFile=/opt/services/.env
+ExecStart=/opt/services/scripts/auto-deploy-check.sh
+# el ciclo normal no despliega nada; cuando sí lo hace, construye imágenes y espera health
+TimeoutStartSec=1800
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

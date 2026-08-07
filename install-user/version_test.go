@@ -102,6 +102,57 @@ func TestReleaseWorkflow_WorkingDirectory_NoEsGlobal(t *testing.T) {
 	}
 }
 
+// El repo adoptó flujo con develop: el trabajo nace en ramas, se integra a develop y de ahí
+// pasa a main con su tag. Un workflow de CI que no escuche esas dos ramas mira donde el
+// trabajo ya no está.
+//
+// Ya pasó una vez, y está documentado en el propio comentario de ci-mcp.yml (DOMAINSERV-192):
+// al migrar de la rama `services` a main, los workflows se quedaron apuntando a la vieja y
+// "el push a main solo disparaba CI install-user, que valida otro módulo: un check verde que
+// no decía nada de domain-mcp". Este guard existe para que el próximo cambio de flujo no
+// repita el error.
+func TestWorkflowsDeCI_CubrenLasRamasDondeViveElTrabajo(t *testing.T) {
+	ciWorkflows := []string{
+		"ci-mcp.yml",
+		"ci-install-user.yml",
+		"ci-shell-guards.yml",
+		"benchmarks-mcp.yml",
+	}
+
+	for _, wf := range ciWorkflows {
+		raw, err := os.ReadFile(filepath.Join("..", ".github", "workflows", wf))
+		if err != nil {
+			t.Errorf("%s: %v", wf, err)
+			continue
+		}
+		contenido := string(raw)
+
+		linea := lineaDeBranches(contenido)
+		if linea == "" {
+			t.Errorf("%s: no declara `branches:` en su trigger de push", wf)
+			continue
+		}
+		for _, rama := range []string{"main", "develop"} {
+			if !strings.Contains(linea, rama) {
+				t.Errorf("%s: su push no escucha %q (línea: %s) — el trabajo en esa rama no se verificaría", wf, rama, strings.TrimSpace(linea))
+			}
+		}
+		// `services` se borró del remoto: dejarla en la lista describe un repo que ya no existe
+		if strings.Contains(linea, "services]") || strings.Contains(linea, "[services") {
+			t.Errorf("%s: sigue listando la rama `services`, que ya no existe en el remoto", wf)
+		}
+	}
+}
+
+func lineaDeBranches(contenido string) string {
+	for _, l := range strings.Split(contenido, "\n") {
+		if strings.Contains(l, "branches:") {
+			return l
+		}
+	}
+	return ""
+}
+
 func TestCompararVersiones_MenorMayorEIgual(t *testing.T) {
 	casos := []struct {
 		a, b     string

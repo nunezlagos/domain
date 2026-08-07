@@ -8,7 +8,7 @@ name: CI install-user
 
 on:
   push:
-    branches: [services, main]
+    branches: [main, develop]
     paths:
       - 'install-user/**'
       - '.github/workflows/ci-install-user.yml'

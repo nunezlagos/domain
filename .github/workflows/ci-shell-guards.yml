@@ -16,7 +16,7 @@ name: CI shell guards
 
 on:
   push:
-    branches: [services, main]
+    branches: [main, develop]
     paths:
       - 'scripts/**'
       - 'services/scripts/**'

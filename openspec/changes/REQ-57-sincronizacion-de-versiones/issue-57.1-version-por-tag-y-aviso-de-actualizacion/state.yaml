@@ -1,6 +1,9 @@
-status: proposed
+status: active
 created: 2026-08-07
 archived: ~
+# fases 0 y 1 implementadas el 2026-08-07 (commits d5c02649 y edbd5273, flow 11ef4e8e).
+# NO pasa a implemented: quedan las fases 2, 3, 4 y 5, y 8 de los 16 escenarios del spec
+# siguen sin cobertura. La 5 toca produccion y necesita autorizacion explicita.
 issue_id: 5d92d6dc-2616-4c8c-816f-d1aa6a62d117
 issue_slug: issue-57.1-version-por-tag-y-aviso-de-actualizacio
 req_parent: REQ-57-sincronizacion-de-versiones

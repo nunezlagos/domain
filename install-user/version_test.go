@@ -80,6 +80,28 @@ func TestReleaseWorkflow_Build_InyectaElTagComoVersion(t *testing.T) {
 	}
 }
 
+// El primer tag del proyecto (v0.3.0) hizo correr este workflow por primera vez desde que
+// existe —run_number=1— y el job de release murió: había un `defaults: run:
+// working-directory: install-user` a nivel WORKFLOW, que aplica a todos los `run:` de todos
+// los jobs. Pero download-artifact es una ACTION y descarga en $GITHUB_WORKSPACE/artifacts,
+// así que el `find artifacts` del flatten buscaba dentro de install-user/ y no encontraba nada.
+//
+// El working-directory tiene que quedar en el job que compila, no arriba. Este guard falla si
+// alguien lo vuelve a subir.
+func TestReleaseWorkflow_WorkingDirectory_NoEsGlobal(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", ".github", "workflows", "release-installer.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, linea := range strings.Split(string(raw), "\n") {
+		// a nivel workflow las claves van sin indentar; dentro de un job llevan espacios
+		if linea == "defaults:" {
+			t.Fatal("release-installer.yml tiene un `defaults:` a nivel WORKFLOW: el job de release heredaría install-user/ y su `find artifacts` no encontraría lo que download-artifact deja en el workspace")
+		}
+	}
+}
+
 func TestCompararVersiones_MenorMayorEIgual(t *testing.T) {
 	casos := []struct {
 		a, b     string

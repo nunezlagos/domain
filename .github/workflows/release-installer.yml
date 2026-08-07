@@ -16,14 +16,20 @@ on:
 permissions:
   contents: write  # necesario para subir release assets
 
-defaults:
-  run:
-    working-directory: install-user
+# El working-directory va POR JOB y no en un defaults global, y no es estilo: cuando estaba
+# arriba, el job release heredaba install-user/ para todos sus `run:`, pero download-artifact
+# es una ACTION y descarga en $GITHUB_WORKSPACE/artifacts. El `find artifacts` del flatten
+# buscaba dentro de install-user/, donde ese directorio no existe, y el job moría ahí.
+# Se descubrió con el primer tag del proyecto (v0.3.0, run_number=1): el workflow existía
+# desde REQ-54 y su segundo job NUNCA se había ejecutado.
 
 jobs:
   build:
     name: Build ${{ matrix.os }}/${{ matrix.arch }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: install-user
     strategy:
       matrix:
         include:

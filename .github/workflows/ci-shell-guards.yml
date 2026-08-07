@@ -64,6 +64,7 @@ jobs:
           services/caddy/caddyfile-scan-fingerprint_test.sh
           services/domain-mcp/deploy/monitoring/loki-config_test.sh
           services/domain-mcp/deploy/monitoring/tarpit_test.sh
+          services/install-version-stamp_test.sh
           services/scripts/config-drift_test.sh
           services/scripts/healthcheck-alert_test.sh
           services/scripts/monitoring-verify_test.sh
@@ -94,7 +95,7 @@ jobs:
             exit 1
           fi
 
-      - name: Correr las 10 suites
+      - name: Correr las 11 suites
         run: |
           set -uo pipefail
           fallidas=""
@@ -102,6 +103,7 @@ jobs:
             scripts/tests/test_deploy.sh \
             scripts/tests/test_orchestrator.sh \
             scripts/tests/test_path_filters.sh \
+            services/install-version-stamp_test.sh \
             services/scripts/config-drift_test.sh \
             services/scripts/healthcheck-alert_test.sh \
             services/scripts/monitoring-verify_test.sh \

@@ -152,16 +152,19 @@ if [[ -d "$INSTALL_DIR" ]]; then
   git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$INSTALL_DIR" \
     || git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 fi
+# --tags no es opcional (issue-57.1): sin él un tag publicado puede no llegar al VPS, y
+# `git describe --exact-match` no lo encuentra. El sello quedaría en 'dev' con el tag ya
+# existiendo en el remoto — sin error, solo silencio.
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   log "Repo ya clonado, git pull..."
-  (cd "$INSTALL_DIR" && git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
+  (cd "$INSTALL_DIR" && git fetch --tags origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
   ok "Repo actualizado a origin/$REPO_BRANCH"
 elif [[ -d "$INSTALL_DIR" ]] && [[ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
   # Existe pero no es git (ej: archivos copiados por rsync o install viejo).
   # Inicializamos git apuntando al repo oficial y sincronizamos.
   log "$INSTALL_DIR existe sin .git, inicializando + pulling..."
   (cd "$INSTALL_DIR" && git init -q && git remote add origin "$REPO_URL" && \
-    git fetch origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
+    git fetch --tags origin "$REPO_BRANCH" && git reset --hard "origin/$REPO_BRANCH")
   ok "Git inicializado y sincronizado con origin/$REPO_BRANCH"
 else
   mkdir -p "$INSTALL_DIR"
@@ -276,6 +279,28 @@ else
   done
   ok ".env preservado + solo lo faltante regenerado"
 fi
+
+# Sello de versión del build (issue-57.1). El compose pasa ${VERSION:-dev} como build arg y
+# el Dockerfile lo inyecta con -X main.Version. Sin esto el server se compila como "dev",
+# el bootstrap devuelve server.version="dev", EsVersionDeRelease lo rechaza y el aviso de
+# actualización del cliente nunca se emite — con todo el resto de REQ-57 en su lugar.
+#
+# Va al .env y no a una variable exportada porque el .env sobrevive a las invocaciones
+# posteriores de docker compose: el `make restart` manual y el `up -d --force-recreate` que
+# este mismo script sugiere al final reconstruirían con el default si el valor no persistiera.
+#
+# A diferencia de las credenciales de arriba, se SOBRESCRIBE siempre: cada deploy despliega
+# un commit distinto, y preservarlo dejaría el .env sellado con la versión del primer deploy.
+#
+# --exact-match es el mismo criterio que install-user/Makefile, para que server y cliente
+# hablen el mismo idioma: sin un tag EN HEAD el valor cae a 'dev' y no finge ser una release.
+DEPLOY_VERSION=$(git -C "$INSTALL_DIR" describe --tags --exact-match 2>/dev/null || echo dev)
+DEPLOY_COMMIT=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
+env_set VERSION "$DEPLOY_VERSION" "$ENV_FILE"
+env_set COMMIT "$DEPLOY_COMMIT" "$ENV_FILE"
+env_set BUILD_TIME "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ENV_FILE"
+ok "sello del build: VERSION=$DEPLOY_VERSION COMMIT=$DEPLOY_COMMIT"
+
 chmod 600 "$ENV_FILE"
 
 # === STEP 5: Generate certs ===

@@ -27,9 +27,9 @@ func TestValidateDAG_SkipSuffix_Valid(t *testing.T) {
 		{"skip onboard", []phases.PhaseSlug{"sdd-onboard"}, 10},
 		{"skip archive+onboard", []phases.PhaseSlug{"sdd-archive", "sdd-onboard"}, 9},
 		{"skip review+archive+onboard", []phases.PhaseSlug{"sdd-review", "sdd-archive", "sdd-onboard"}, 8},
-		{"skip judge+4r+review+archive+onboard", []phases.PhaseSlug{"sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard"}, 7},
+		{"skip judge+4r+review+archive+onboard", []phases.PhaseSlug{"sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard"}, 8},
 		{"skip all after explore", []phases.PhaseSlug{
-			"sdd-spec", "sdd-propose", "sdd-design", "sdd-tasks",
+			"sdd-spec", "sdd-propose", "sdd-design", "sdd-compliance", "sdd-tasks",
 			"sdd-apply", "sdd-verify", "sdd-judge", "sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 		}, 1},
 	}
@@ -95,7 +95,7 @@ func TestValidateDAG_UnknownStartingPhase_ReturnsError(t *testing.T) {
 
 func TestValidateDAG_SkipAll_ValidBecauseNothingKept(t *testing.T) {
 	err := ValidateDAG(FullPhases, []phases.PhaseSlug{
-		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design",
+		"sdd-explore", "sdd-spec", "sdd-propose", "sdd-design", "sdd-compliance",
 		"sdd-tasks", "sdd-apply", "sdd-verify", "sdd-judge",
 		"sdd-4r", "sdd-review", "sdd-archive", "sdd-onboard",
 	}, "")

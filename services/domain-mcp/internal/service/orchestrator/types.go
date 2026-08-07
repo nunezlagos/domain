@@ -69,18 +69,19 @@ func (m Mode) IsValid() bool {
 type PhaseSlug string
 
 const (
-	PhaseExplore PhaseSlug = "sdd-explore"
-	PhaseSpec    PhaseSlug = "sdd-spec"
-	PhasePropose PhaseSlug = "sdd-propose"
-	PhaseDesign  PhaseSlug = "sdd-design"
-	PhaseTasks   PhaseSlug = "sdd-tasks"
-	PhaseApply   PhaseSlug = "sdd-apply"
-	PhaseVerify  PhaseSlug = "sdd-verify"
-	PhaseJudge   PhaseSlug = "sdd-judge"
-	Phase4R      PhaseSlug = "sdd-4r"
-	PhaseReview  PhaseSlug = "sdd-review"
-	PhaseArchive PhaseSlug = "sdd-archive"
-	PhaseOnboard PhaseSlug = "sdd-onboard"
+	PhaseExplore    PhaseSlug = "sdd-explore"
+	PhaseSpec       PhaseSlug = "sdd-spec"
+	PhasePropose    PhaseSlug = "sdd-propose"
+	PhaseDesign     PhaseSlug = "sdd-design"
+	PhaseTasks      PhaseSlug = "sdd-tasks"
+	PhaseApply      PhaseSlug = "sdd-apply"
+	PhaseVerify     PhaseSlug = "sdd-verify"
+	PhaseJudge      PhaseSlug = "sdd-judge"
+	PhaseCompliance PhaseSlug = "sdd-compliance"
+	Phase4R         PhaseSlug = "sdd-4r"
+	PhaseReview     PhaseSlug = "sdd-review"
+	PhaseArchive    PhaseSlug = "sdd-archive"
+	PhaseOnboard    PhaseSlug = "sdd-onboard"
 )
 
 // OrchestrateInput es el contrato externo del orquestador. PromptRouter,

@@ -16,14 +16,18 @@ var phaseDependencies = map[phases.PhaseSlug][]phases.PhaseSlug{
 	"sdd-spec":    {"sdd-explore"},
 	"sdd-propose": {"sdd-spec"},
 	"sdd-design":  {"sdd-propose"},
-	"sdd-tasks":   {"sdd-design"},
-	"sdd-apply":   {"sdd-tasks"},
-	"sdd-verify":  {"sdd-apply"},
-	"sdd-judge":   {"sdd-verify"},
-	"sdd-4r":      {"sdd-judge"},
-	"sdd-review":  {"sdd-4r"},
-	"sdd-archive": {"sdd-review"},
-	"sdd-onboard": {"sdd-archive"},
+	// issue-56.5: la fase de compliance se intercala acá, así que sdd-tasks pasa a depender de
+	// ella y no de sdd-design. Es el último punto donde corregir es barato: todavía no hay
+	// tasks generadas ni código escrito.
+	"sdd-compliance": {"sdd-design"},
+	"sdd-tasks":      {"sdd-compliance"},
+	"sdd-apply":      {"sdd-tasks"},
+	"sdd-verify":     {"sdd-apply"},
+	"sdd-judge":      {"sdd-verify"},
+	"sdd-4r":         {"sdd-judge"},
+	"sdd-review":     {"sdd-4r"},
+	"sdd-archive":    {"sdd-review"},
+	"sdd-onboard":    {"sdd-archive"},
 }
 
 // ValidateDAG verifica que SkipPhases no deje fases sin sus

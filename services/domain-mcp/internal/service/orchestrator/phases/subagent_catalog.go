@@ -41,9 +41,10 @@ func AgentesNombradosEn(plan string) []string {
 // este map contra lo que cada fase declara, en las dos direcciones.
 func SubagentPlans() map[string]string {
 	return map[string]string{
-		"sdd-explore": exploreSubagentPlan,
-		"sdd-4r":      fourRSubagentPlan,
-		"sdd-verify":  verifySubagentPlan,
-		"sdd-onboard": onboardSubagentPlan,
+		"sdd-explore":    exploreSubagentPlan,
+		"sdd-4r":         fourRSubagentPlan,
+		"sdd-compliance": complianceSubagentPlan,
+		"sdd-verify":     verifySubagentPlan,
+		"sdd-onboard":    onboardSubagentPlan,
 	}
 }

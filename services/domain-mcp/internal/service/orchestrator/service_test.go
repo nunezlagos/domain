@@ -70,6 +70,7 @@ func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	reg.MustRegister(phases.NewSDDSpecHandler())
 	reg.MustRegister(phases.NewSDDProposeHandler())
 	reg.MustRegister(phases.NewSDDDesignHandler())
+	reg.MustRegister(phases.NewSDDComplianceHandler())
 	reg.MustRegister(phases.NewSDDTasksHandler())
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())
@@ -90,5 +91,5 @@ func TestService_Run_DefaultMode_IsFull(t *testing.T) {
 	require.NotEqual(t, uuid.Nil, res.FlowRunID)
 	require.Equal(t, ModeFull, res.Mode, "Mode vacío resuelve a Full por default")
 	require.NotNil(t, res.Plan, "Full mode arma plan in-memory cuando Repo es nil")
-	require.Len(t, res.Plan.Steps, 12, "Full plan = 12 fases sin skips")
+	require.Len(t, res.Plan.Steps, 13, "Full plan = 13 fases sin skips")
 }

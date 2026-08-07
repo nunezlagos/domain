@@ -53,6 +53,7 @@ func buildFullPhasesRegistry() *phases.Registry {
 	reg.MustRegister(phases.NewSDDSpecHandler())
 	reg.MustRegister(phases.NewSDDProposeHandler())
 	reg.MustRegister(phases.NewSDDDesignHandler())
+	reg.MustRegister(phases.NewSDDComplianceHandler())
 	reg.MustRegister(phases.NewSDDTasksHandler())
 	reg.MustRegister(phases.NewSDDApplyHandler())
 	reg.MustRegister(phases.NewSDDVerifyHandler())

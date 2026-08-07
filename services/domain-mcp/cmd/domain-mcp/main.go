@@ -224,6 +224,7 @@ func main() {
 	orchPhases.MustRegister(phases.NewSDDSpecHandler())
 	orchPhases.MustRegister(phases.NewSDDProposeHandler())
 	orchPhases.MustRegister(phases.NewSDDDesignHandler())
+	orchPhases.MustRegister(phases.NewSDDComplianceHandler())
 	orchPhases.MustRegister(phases.NewSDDTasksHandler())
 	orchPhases.MustRegister(phases.NewSDDApplyHandler())
 	orchPhases.MustRegister(phases.NewSDDVerifyHandler())

@@ -30,6 +30,7 @@ func handlersConPlanPotencial() []Handler {
 		NewSDDVerifyHandler(),
 		NewSDDJudgeHandler(),
 		NewSDD4RHandler(),
+		NewSDDComplianceHandler(),
 		NewSDDReviewHandler(),
 		NewSDDArchiveHandler(),
 		NewSDDOnboardHandler(),

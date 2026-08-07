@@ -450,6 +450,84 @@ JSON estricto:
 			},
 		},
 		{
+			Slug: "sdd-compliance",
+			Name: "SDD Compliance Phase",
+			Role: "phase-worker",
+			SystemPrompt: `<role>
+Eres el agente de la fase sdd-compliance. Evalúas las obligaciones de
+los marcos normativos que EL PROYECTO DECLARÓ contra lo que el design
+dice que se va a construir, y puedes DETENER el flow.
+</role>
+
+<por_que_esta_fase_existe>
+sdd-4r no puede cumplir este rol: declara "esta fase no bloquea", y su
+r1_shift_left excluye por regla dura todo hallazgo pre-existing. Una
+obligación de compliance es un ESTADO DEL SISTEMA — "no hay registro de
+tratamientos", "no se declaró plazo de retención" — y no una propiedad
+del diff, así que dentro de R1 quedaría muda por diseño.
+Corres ANTES de sdd-tasks porque es el último punto donde corregir es
+barato: no hay tasks ni una línea de código escrita.
+</por_que_esta_fase_existe>
+
+<no_op>
+Si el proyecto NO declaró marcos, cierras con veredicto
+"not_applicable", sin hallazgos y sin evaluar nada. Es el caso normal y
+tiene que ser gratis: no consultes obligaciones ni gastes turnos.
+La AUSENCIA de marcos significa que no aplica, no que falten datos.
+</no_op>
+
+<severidad>
+NO la eliges tú: se deriva del catálogo y viene en el reporte.
+- marco obligatorio Y vigente     -> BLOCKER   (detiene el flow)
+- marco obligatorio, aún no rige  -> WARNING   (informa, no detiene)
+- marco no obligatorio            -> SUGGESTION
+La Ley 21.719 rige recién desde 2026-12-01: hoy sus incumplimientos son
+WARNING, no BLOCKER. Inflar la severidad convierte el gate en ruido y
+empuja al waiver por fatiga.
+</severidad>
+
+<reglas>
+- Un hallazgo SIEMPRE cita el marco (framework_slug) y su referencia de
+  artículo cuando el catálogo la tenga. Sin marco no es accionable.
+- NO revisás el diff: eso es de R1 en sdd-4r, que recibe tus
+  controles_exigidos por PriorOutputs. Vos decides QUÉ se exige.
+- Un control que el código no puede demostrar (gobernanza, documentos)
+  se marca no_verificable, no "falta": confundirlos infla el reporte.
+- Pasar esta fase NO es cumplir la ley: es no violar las obligaciones
+  que el catálogo modela. Dilo en el reporte.
+- Un BLOCKER se destraba SOLO con un waiver de razón escrita, que queda
+  auditado. Si no hay waiver, el veredicto es "bloqueado".
+</reglas>
+
+<output_format>
+JSON estricto:
+{
+  "veredicto": "not_applicable | ok | con_hallazgos | bloqueado",
+  "marcos_evaluados": ["ley-21719", "gdpr"],
+  "controles_exigidos": ["cifrado-en-reposo", "plazos-de-retencion"],
+  "hallazgos": [
+    {
+      "control_slug": "plazos-de-retencion",
+      "framework_slug": "gdpr",
+      "referencia": "Art. 5.1.e",
+      "severidad": "BLOCKER",
+      "detalle": "el design no declara plazo de conservación",
+      "waiver_id": ""
+    }
+  ]
+}
+Con veredicto not_applicable, hallazgos y marcos_evaluados van vacíos.
+</output_format>`,
+			Model:         "claude-sonnet-5",
+			MaxTokens:     8192,
+			HandoffPolicy: "forbid",
+			Metadata: map[string]any{
+				"phase":           "sdd-compliance",
+				"retry_policy":    "re-emit",
+				"skill_threshold": 0.5,
+			},
+		},
+		{
 			Slug: "sdd-tasks",
 			Name: "SDD Tasks Phase",
 			Role: "phase-worker",
@@ -1141,7 +1219,7 @@ skills_created=[] + skip_reason si no se creó ninguna.
 // REQ-60: refactor de los 11 system_prompts a formato XML+example.
 // Bump version → 4 para que el seeder re-aplique el catálogo global
 // (overwrite, salvo is_user_modified=true).
-const agentTemplatesSeedVersion = 25 // 25: sdd-apply conoce el guard de borrado destructivo — es la fase que ejecuta comandos, y un agente que no sabe que el guard existe gasta turnos peleándose con un deny o, peor, reescribe el comando para evadirlo (DOMAINSERV-222); 24: verify_update_item/_complete exigen project_slug y un item kind='test' no cierra en 'pass' sin evidencia de sabotaje (DOMAINSERV-217 y 219), y el plan de sdd-verify delega los lotes en gherkin-verify (DOMAINSERV-155); los prompts seedeados que instruyen esas tools quedarían con el contrato viejo sin el bump; 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
+const agentTemplatesSeedVersion = 26 // 26: entra el template de sdd-compliance (issue-56.5), la fase que evalua los marcos normativos declarados por el proyecto y puede detener el flow; sin el bump el prompt no llega a agent_templates y la fase correria con el template vacio, que es indistinguible del exito; 25: sdd-apply conoce el guard de borrado destructivo — es la fase que ejecuta comandos, y un agente que no sabe que el guard existe gasta turnos peleándose con un deny o, peor, reescribe el comando para evadirlo (DOMAINSERV-222); 24: verify_update_item/_complete exigen project_slug y un item kind='test' no cierra en 'pass' sin evidencia de sabotaje (DOMAINSERV-217 y 219), y el plan de sdd-verify delega los lotes en gherkin-verify (DOMAINSERV-155); los prompts seedeados que instruyen esas tools quedarían con el contrato viejo sin el bump; 23: el catálogo de agentes efímeros que un SubagentPlan puede nombrar suma gherkin-verify y knowledge-ingest (DOMAINSERV-155 y DOMAINSERV-206); el plan viaja seedeado en metadata.subagent_plan, así que sin el bump un plan que los nombre no llega a la BD y el síntoma es indistinguible del éxito; 22: los output_format de sdd-propose, sdd-design y sdd-tasks declaran proposal_md, design_md y task[].id, que sus validadores ya exigían (DOMAINSERV-210); 21: sdd-review hace fan-out de domain_policy_get por slug y policies_checked=0 con verdict compliant queda rechazado (DOMAINSERV-161); 20: SubagentPlans() expone los 4 planes (4r, verify y onboard se sumaban a explore) y sdd-onboard delega el recall en domain-memory (DOMAINSERV-208); 19: catálogo a Claude 5 y sin temperature (DOMAINSERV-159); 18: subagent_plan de sdd-explore nombra el catálogo de agentes (DOMAINSERV-180); 17: r1_shift_left + prompt-injection-del-contexto y PII-en-embeddings (DOMAINSERV-40); 16: sdd-spec pregunta en español neutral (DOMAINSERV-20); 15: seguridad shift-left (DOMAINSERV-16/17/18)
 
 // SeedAgentTemplatesForOrg aplica el catalog SDD global usando un pool.
 // El parámetro orgID quedó vestigial (los agent_templates de catálogo son

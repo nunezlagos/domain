@@ -6,6 +6,15 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/).
 
 ## [Unreleased]
 
+### Agregado — el instalador baja el binario publicado en vez de instalar Go y compilar
+
+- **Es la fase que hace que el aviso le llegue a alguien (REQ-57 fase 2)**: `bootstrap.sh` compilaba con `go build -ldflags "-s -w"`, sin `-X`, así que **todo cliente instalado por el camino oficial se declaraba `dev`** y quedaba fuera de la comparación de versiones por diseño. Las fases 0 y 1 estaban completas y el aviso solo alcanzaba a quien bajara el binario de la release a mano.
+- **La descarga es anónima, y es una restricción dura del producto**: hay usuarios que solo clonan la solución y la instalan, sin cuenta de GitHub. `curl -fsSL` sin headers de auth, contra `/releases/latest/download`, que resuelve al último tag y evita hardcodear ningún número de versión. Hay un test que falla si aparece `Authorization:`, `GITHUB_TOKEN`, `curl -u` o `git clone` en el script.
+- **El binario se verifica contra el `SHA256SUMS.txt`** que el workflow ya publicaba junto a los assets, y la verificación contempla **`sha256sum` y `shasum -a 256`**: el primero es de coreutils y no existe en macOS, que `bootstrap.sh` soporta explícitamente. Sin las dos, el camino nuevo fallaría siempre en mac y caería a compilar **en silencio**.
+- **El fallback a Go + compile se conserva entero**, y no es defensivo de más: los 5 assets no cubren todas las arquitecturas, y un tag cuyo workflow de release falla no publica ninguno — pasó con `v0.3.0`. Cuando la descarga falla, el script lo dice y sigue por el camino de siempre.
+- **El `go build` del fallback sigue SIN `-X`, a propósito**: un binario hecho desde el código fuente no es una release, y declararse `dev` es exactamente lo que lo deja fuera de la comparación. Mismo criterio que `install-user/Makefile`, que usa `--exact-match`.
+- **Dos de los tests no discriminaban, y los sabotajes lo destaparon**: uno buscaba la palabra `shasum` en el texto y sobrevivía a romper el `command -v`; el otro buscaba `go build` y sobrevivía a un `if false && go build`. Se reescribieron — el del fallback ahora **ejecuta** el script con un `curl` que falla y un `go` falso, en vez de leer el archivo. Los tres sabotajes finales (quitar el checksum, romper el soporte de macOS, hacer que la descarga fallida aborte) ponen en rojo el chequeo que corresponde, con su razón textual.
+
 ### Corregido — el deploy sella la versión del server, sin lo cual todo REQ-57 quedaba inerte
 
 - **El eslabón que faltaba, y que el tasks.md de issue-57.1 no contemplaba**: el `Dockerfile` declaraba `ARG VERSION=dev` y el compose pasaba `VERSION: ${VERSION:-dev}`, pero **nadie definía `VERSION` en ningún lado** — `grep` sin coincidencias en `install.sh` y en `scripts/deploy.sh`. El server se desplegaba con `Version="dev"`, el bootstrap devolvía `server.version="dev"`, `EsVersionDeRelease` lo rechazaba y el aviso de actualización del cliente **no se emitía nunca**. La fase 0 pedía "exponer la versión del server" y eso se hizo; lo que nadie verificó es que el valor expuesto fuera real.

@@ -101,6 +101,56 @@ else
   exit 1
 fi
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# ---------- binario publicado (issue-57.1 fase 2) ----------
+# Bajarlo evita instalar Go y compilar, pero sobre todo evita que el cliente salga sin versión:
+# un binario compilado acá se declara 'dev' y queda FUERA de la comparación por diseño, así que
+# nunca recibiría el aviso de actualización. El de la release trae su -X puesto.
+#
+# La descarga es ANÓNIMA y esa es una restricción dura, no una preferencia: hay usuarios que
+# solo clonan la solución y la instalan, sin cuenta de GitHub. curl sin headers de auth.
+#
+# /releases/latest/download resuelve al último tag publicado, así que el script no hardcodea
+# ningún número de versión.
+DOMAIN_REPO="${DOMAIN_REPO:-nunezlagos/domain}"
+ASSET="domain-install-${OS}-${ARCH}"
+RELEASE_URL="https://github.com/${DOMAIN_REPO}/releases/latest/download"
+
+# sha256sum es de coreutils y no existe en macOS; ahí el equivalente es shasum -a 256. Sin las
+# dos, la verificación fallaría siempre en mac y el script caería a compilar sin decir por qué.
+sha_check() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum -c --status -
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 -c --status -
+  else return 1
+  fi
+}
+
+binario_descargado=0
+if [ "${DOMAIN_INSTALL_FROM_SOURCE:-0}" != "1" ]; then
+  step "Bajando el binario publicado (${ASSET})"
+  DL=$(mktemp -d)
+  if curl -fsSL --retry 3 -m 120 -o "$DL/$ASSET" "$RELEASE_URL/$ASSET" \
+     && curl -fsSL --retry 3 -m 60 -o "$DL/SHA256SUMS.txt" "$RELEASE_URL/SHA256SUMS.txt" \
+     && (cd "$DL" && grep " ${ASSET}\$" SHA256SUMS.txt | sha_check); then
+    chmod +x "$DL/$ASSET"
+    mv "$DL/$ASSET" "$SCRIPT_DIR/domain-install"
+    binario_descargado=1
+    ok "binario verificado contra SHA256SUMS.txt — sin Go, sin compilar"
+  else
+    # Que caiga acá es esperable: arquitecturas sin binario publicado, sin red, o un tag cuyo
+    # workflow de release fallo. Se informa y se sigue por el camino de siempre.
+    warn "no se pudo bajar o verificar el binario publicado — se compila desde el código"
+  fi
+  rm -rf "$DL"
+fi
+
+if [ "$binario_descargado" = "1" ]; then
+  step "Ejecutando domain-install $*"
+  cd "$SCRIPT_DIR"
+  exec ./domain-install "$@"
+fi
+
 # ---------- detección Go ----------
 go_ok=0
 if command -v go >/dev/null 2>&1; then
@@ -154,9 +204,11 @@ if [ "$go_ok" -eq 0 ]; then
 fi
 
 # ---------- build ----------
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Se compila SIN -X a propósito: un binario hecho desde el código fuente no es una release, y
+# declararse 'dev' es lo que lo deja fuera de la comparación de versiones. Mismo criterio que
+# install-user/Makefile, que usa --exact-match.
 step "Compilando domain-install"
 if go build -ldflags "-s -w" -o domain-install .; then
   ok "binario listo: $SCRIPT_DIR/domain-install ($(du -h domain-install | awk '{print $1}'))"

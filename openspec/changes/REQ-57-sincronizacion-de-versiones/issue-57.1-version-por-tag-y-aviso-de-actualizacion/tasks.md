@@ -22,9 +22,11 @@ Seis fases entregables por separado. Las 0-1 dan el 80% del valor y son casi gra
 
 ## Fase 2 — Distribución sin Git ni Go
 
-- [ ] El instalador baja el binario de Releases (anónimo, sin credenciales) (REQ-4)
-- [ ] Conservar clone + compile como fallback para arquitecturas sin binario publicado
-- [ ] Test: la descarga no usa credenciales ni `git`
+- [x] El instalador baja el binario de Releases (anónimo, sin credenciales) (REQ-4)
+  — `bootstrap.sh` baja de `/releases/latest/download` y verifica contra `SHA256SUMS.txt`
+- [x] Conservar clone + compile como fallback para arquitecturas sin binario publicado
+  — verificado EJECUTANDO el script con un `curl` que falla, no leyendo el texto
+- [x] Test: la descarga no usa credenciales ni `git`
 
 ## Fase 3 — Actualización en un paso
 

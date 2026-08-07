@@ -1,0 +1,11 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Cubre REQ-5 del spec del padre. Independiente de la 66.2: se pueden hacer en paralelo.
+# La 66.4 depende de esta y de la 66.2.
+# Molde MEDIDO que se calca: tool_channels.go (REQ-54 issue-54.6) clasifica 166 tools y su guard
+# TestAllToolsHaveChannel rompe CI ante una tool sin canal. Prueba que la invariante "cero tools
+# huerfanas" se sostiene a esta escala. La matriz nueva cubre 181, no 166.
+# Riesgo principal: el catalogo global (policies de plataforma, skills globales, marcos de
+# compliance) DEBE quedar legible por todos, o un developer deja de ver las reglas que lo gobiernan.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

@@ -1,0 +1,9 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Cubre REQ-4 del spec del padre. Es una funcion PURA: no toca la base y se puede hacer en paralelo
+# con la 66.3. La 66.4 depende de esta.
+# El caso que define su calidad es el rol DESCONOCIDO: users.role es varchar libre y ya contiene
+# 'owner', un valor que la tabla roles no tiene. Lo irreconocible NO puede caer a nivel 0
+# (developer), porque un developer si puede hacer cosas — tiene que ser rechazo.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

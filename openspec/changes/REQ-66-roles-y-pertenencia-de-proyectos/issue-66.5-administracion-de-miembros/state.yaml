@@ -1,0 +1,9 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Cubre la parte operable de REQ-4. DEPENDE de 66.1 (tabla) y 66.2 (la regla).
+# ADVERTENCIA: sin el enforcement de 66.4, esta issue da una FALSA sensacion de control — quitar un
+# miembro no revoca sus API keys, y su proximo llamado solo falla si el chequeo de nivel esta vivo.
+# Queda FUERA y merece issue propia: transferir owner_id. Es la unica operacion que puede dejar a
+# alguien sin acceso a lo que creo.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

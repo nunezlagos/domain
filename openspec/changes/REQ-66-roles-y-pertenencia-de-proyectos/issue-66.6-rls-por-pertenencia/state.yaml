@@ -1,0 +1,17 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Cubre REQ-7 del spec del padre. VA ULTIMA, y su prioridad baja es PARTE DEL DISENO, no un olvido.
+# DEPENDE de 66.1 a 66.4 implementadas Y EN USO, no solo mergeadas.
+#
+# RAZON DEL ORDEN, medida en este repo: bajo RLS, un SELECT sin el GUC devuelve CERO FILAS SIN
+# ERROR. Un filtro mal puesto en la capa de servicio produce un bug visible; la misma equivocacion
+# en una policy produce datos que desaparecen en silencio.
+#
+# LIMPIEZA PREVIA OBLIGATORIA: 16 tablas tienen FORCE con ENABLE en f — parecen protegidas y no lo
+# estan, porque Postgres ignora el force sin el enable. Y las policies inertes de projects filtran
+# por organization_id, columna que ya no existe: no se reactivan, se reescriben.
+#
+# NO EMPEZAR con un solo usuario en la instalacion: cualquier policy da verde con un solo actor,
+# incluso una que no filtre nada.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

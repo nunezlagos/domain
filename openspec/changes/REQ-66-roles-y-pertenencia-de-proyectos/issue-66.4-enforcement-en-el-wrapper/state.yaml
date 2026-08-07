@@ -1,0 +1,12 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Cubre REQ-6 del spec del padre. DEPENDE de 66.1, 66.2 y 66.3.
+# Es donde el modelo pasa de declarado a vigente.
+# MEDIDO: ResilientWrapper envuelve el 100% de las tools y ya autoriza por nombre
+# (server.go:167, SetAllowedToolsAccessor). El chequeo de nivel va AHI, no en 181 handlers.
+# MEDIDO: withProjectTxHandler (wireup.go:175) falla cerrado y resuelve slug + GUC, pero solo tiene
+# 8 usos contra 35 de withOrgTxHandler. Migrar las tools con project_slug es parte de esta issue.
+# RIESGO PRINCIPAL: los caminos internos (hooks, agentes del orquestador, service token ACP) usan
+# credenciales propias; si el nivel se les aplica igual, se rompen flujos que hoy andan.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

@@ -1,0 +1,10 @@
+status: draft
+created: 2026-08-07
+archived: ~
+# Fundacional del REQ-66: las otras cinco issues dependen de esta.
+# Cubre REQ-1, REQ-2 y REQ-3 del spec del padre.
+# DECISION ABIERTA que conviene confirmar con el usuario antes de implementar: el default de
+# visibility. La propuesta es 'shared' porque los 25 proyectos existentes se crearon cuando no
+# habia concepto de privacidad, y marcarlos 'personal' los volveria invisibles para un segundo
+# usuario futuro sin que nadie lo decida — y al ser invisibles, nadie notaria el error.
+req_parent: REQ-66-roles-y-pertenencia-de-proyectos

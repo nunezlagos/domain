@@ -52,8 +52,16 @@ func toolOrchestrate() mcp.Tool {
 			mcp.Description("Override del threshold de Express (default 10). Solo aplica si mode=express."),
 		),
 		mcp.WithString("project_id",
-			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). OBLIGATORIO: scopea el flow_run y la cadena SDD/TDD al proyecto (flow_runs.project_id es NOT NULL)."),
+			mcp.Description("UUID del proyecto de la corrida (de domain_session_bootstrap). OBLIGATORIO: scopea el flow_run y la cadena SDD/TDD al proyecto. La columna flow_runs.project_id es nullable por historia (migracion 000161), pero un flow_run sin proyecto NO puede obtener token de edicion: el RLS de flow_agent_scopes no tiene eje y el grant se deniega."),
 			mcp.Required(),
+		),
+		// DOMAINSERV-256: declarado acá porque el hook post-orchestrate lo lee del tool_input para
+		// pedir el token con scope. Sin declararlo el parámetro se perdía de dos maneras y las dos
+		// eran mudas: el cliente lo descartaba, o lo propagaba como string y el isinstance(list)
+		// del hook lo tiraba. En ambos casos el token salía sin allowed_paths y el gate degradaba
+		// a "sin restricción" — un fail-OPEN que la verificación de 2 agentes de t15 midió.
+		mcp.WithArray("allowed_paths",
+			mcp.Description("DOMAINSERV-218 batch-mode: globs de paths que ESTE agente autoriza a editar en el flow (ej. [\"services/domain-mcp/**\"]). El hook post-orchestrate lo reenvia a domain_flow_grant_token, que firma el scope dentro del token: a partir de ahi el gate pre-edit deniega toda edicion fuera de esos globs y el deny nombra el scope propio. Es lo que permite que N subagentes paralelos editen sin pisarse. Cada glob necesita prefijo literal ('services/**' si, '**/*.go' no: ese no acota nada). Dos agentes del mismo flow no pueden reclamar territorio solapado — el segundo grant se rechaza al EMITIR. Omitido = sin restriccion de path (comportamiento historico de los flows que no declaran particion)."),
 		),
 		mcp.WithString("exec_mode",
 			mcp.Description("Modo de ejecucion: auto (corre sin pausar), manual (pausa y pide aprobacion tras CADA fase via domain_orchestrate_confirm), hybrid (pausa solo en fases clave: spec/design/apply/judge). Default: auto. Consulte al usuario al inicio que modo quiere."),

@@ -253,15 +253,31 @@ else
   fail "(i) falta $UNIT"
 fi
 
-# --- (j) el timer NO se enciende solo en un redeploy --------------------------------------
-# install.sh copia TODAS las unidades del directorio con un glob, pero hace `enable --now`
-# nombrándolas una por una. El auto-deploy tiene que quedar instalado e inactivo: encender
-# un deploy automático sin decisión explícita es exactamente lo que nadie pidió.
+# --- (j) el redeploy deja el auto-deploy ANDANDO ------------------------------------------
+# CONTRATO INVERTIDO por decisión del usuario (2026-08-07). Antes este assert exigía lo
+# contrario: el timer quedaba instalado e inactivo porque el pedido era no encender nada en
+# el VPS. Ahora el pedido es que instalar sea UN solo paso, así que el guard cambia de lado.
+#
+# Sigue haciendo falta, solo que ahora defiende el modo de falla opuesto: install.sh copia
+# las unidades con un GLOB pero las enciende NOMBRÁNDOLAS una por una, así que olvidarse de
+# nombrar esta la deja instalada y apagada — un auto-deploy que no corre nunca y que no
+# produce ningún síntoma, porque el archivo está donde debe.
 INSTALL_SH="$REPO_ROOT/services/install.sh"
-if grep -q "enable.*domain-auto-deploy" "$INSTALL_SH"; then
-  fail "(j) install.sh activa domain-auto-deploy: un redeploy encendería el auto-deploy sin que nadie lo decida"
+if grep -q "enable --now domain-auto-deploy.timer" "$INSTALL_SH"; then
+  pass "(j) install.sh activa el timer de auto-deploy"
 else
-  pass "(j) install.sh no activa el timer de auto-deploy"
+  fail "(j) install.sh NO activa domain-auto-deploy.timer: el redeploy dejaría el auto-deploy instalado pero apagado"
+fi
+
+# --- (k) el ExecStart existe en el layout del VPS, no solo en el repo ---------------------
+# MEDIDO en el VPS 2026-08-07: install.sh clona el repo ENTERO en INSTALL_DIR, así que
+# /opt/services/scripts/ y su lib/ existen. Es la premisa que sostiene el ExecStart: si
+# alguien lo cambiara por un rsync selectivo, el timer fallaría en cada ciclo dentro del
+# journal, semanas después y sin que nadie lo mire.
+if grep -qE 'git clone .*"\$INSTALL_DIR"' "$INSTALL_SH"; then
+  pass "(k) install.sh clona el repo completo: el ExecStart resuelve en el VPS"
+else
+  fail "(k) install.sh ya no clona el repo completo en INSTALL_DIR: el ExecStart del timer podría no existir"
 fi
 
 if (( failed > 0 )); then

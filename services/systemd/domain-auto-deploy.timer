@@ -1,10 +1,9 @@
 [Unit]
 Description=domain-services busca un tag nuevo cada 10 minutos
 
-# NO se activa sola: install.sh copia todas las unidades del directorio, pero solo hace
-# `enable --now` de backup y healthcheck, nombrándolas una por una. El auto-deploy queda
-# instalado e INACTIVO hasta que alguien decida encenderlo a mano:
-#   sudo systemctl enable --now domain-auto-deploy.timer
+# install.sh la enciende en el STEP 7, así que un redeploy deja el auto-deploy andando sin
+# ningún paso extra. Para apagarlo:
+#   sudo systemctl disable --now domain-auto-deploy.timer
 
 [Timer]
 OnCalendar=*:0/10

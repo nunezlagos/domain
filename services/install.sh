@@ -801,6 +801,15 @@ if [[ -d "$INSTALL_DIR/services/systemd" ]]; then
   sudo_run systemctl enable domain-services.service 2>/dev/null || true
   sudo_run systemctl enable --now domain-services-backup.timer domain-services-healthcheck.timer 2>/dev/null || true
   ok "Units + timers systemd activos"
+  # el auto-deploy va aparte y con mensaje propio: a partir de acá publicar un tag alcanza
+  # para cambiar producción, y eso no puede quedar sepultado en un `|| true` silencioso
+  if sudo_run systemctl enable --now domain-auto-deploy.timer 2>/dev/null; then
+    ok "Auto-deploy ACTIVO: un tag v* nuevo en main se despliega solo (chequeo cada 10 min)"
+    ok "  apagarlo:  sudo systemctl disable --now domain-auto-deploy.timer"
+  else
+    warn "no se pudo activar domain-auto-deploy.timer: el deploy sigue siendo manual"
+    warn "  revisá: systemctl status domain-auto-deploy.timer"
+  fi
   # el healthcheck corre cada 5 min y sin topic su única salida es el journal, que
   # nadie mira: un guard que no puede avisar no está cumpliendo (DOMAINSERV-236)
   if [[ -z "$(env_get NTFY_TOPIC "$ENV_FILE")" ]]; then

@@ -14,12 +14,11 @@
 #
 # Pre-req: los mismos que deploy.sh, más `flock` (util-linux, ya en el VPS).
 #
-# Instalación en el VPS (NO la hace install.sh: copia la unidad con su glob pero no la
-# enciende, así que el auto-deploy queda instalado e inactivo hasta esta orden):
-#   sudo systemctl enable --now domain-auto-deploy.timer
+# En el VPS lo instala y lo enciende install.sh (STEP 7): un redeploy deja esto andando.
+# Para mirarlo o apagarlo:
 #   systemctl list-timers domain-auto-deploy.timer
 #   journalctl -u domain-auto-deploy.service -f
-# Para apagarlo: sudo systemctl disable --now domain-auto-deploy.timer
+#   sudo systemctl disable --now domain-auto-deploy.timer
 
 set -euo pipefail
 

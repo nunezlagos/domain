@@ -52,6 +52,16 @@ sin quién lo administre.
 `visibility` toma `personal` o `shared`. Esta regla no admite excepción por rango: es lo que hace
 que "si crean proyectos propios, los demás no los ven" sea cierto sin depender de quién pregunte.
 
+**Un proyecto nuevo nace `personal`.** Compartir es un acto deliberado; no compartir no debería
+requerir ninguno. Los proyectos que ya existían al momento de migrar son la excepción, y se tratan
+en REQ-1: se crearon cuando no había concepto de privacidad y ya tienen slug y repo asociado.
+
+**La invisibilidad tiene una consecuencia sobre el nombre.** Hoy el slug **no es único** —la
+constraint se perdió junto con `organization_id`— y `session_register` reutiliza cualquier proyecto
+cuyo slug coincida, devolviéndolo entero a quien lo pida. Con proyectos personales eso deja de ser
+una molestia y pasa a ser una fuga: dos personas con una carpeta llamada `api` no pueden terminar
+compartiendo proyecto sin haberlo decidido.
+
 #### Scenario: Un proyecto personal no aparece para otro usuario
 - **Given** un proyecto con `visibility='personal'` cuyo dueño es el usuario A
 - **When** el usuario B lista proyectos
@@ -66,6 +76,37 @@ que "si crean proyectos propios, los demás no los ven" sea cierto sin depender 
 - **Given** un proyecto personal de cualquier usuario
 - **When** el usuario con rol global `owner` lista proyectos
 - **Then** el proyecto aparece
+
+#### Scenario: Un proyecto nuevo nace personal
+- **Given** un usuario que registra un proyecto que no existía
+- **When** el registro se completa
+- **Then** el proyecto queda `personal`
+- **And** compartirlo es un acto deliberado posterior
+
+#### Scenario: Un slug ajeno e invisible no se reutiliza ni se revela
+- **Given** un proyecto `personal` del usuario A con slug `api`
+- **When** el usuario B registra un proyecto con el mismo slug `api`
+- **Then** B obtiene un proyecto NUEVO, personal y suyo
+- **And** en ningún momento recibe datos del proyecto de A
+
+#### Scenario: Dos usuarios pueden tener un personal con el mismo nombre
+- **Given** los usuarios A y B, cada uno con un proyecto `personal` llamado `api`
+- **When** cualquiera de los dos resuelve el slug `api`
+- **Then** cada uno obtiene el suyo
+- **And** ninguno de los dos registros impide la existencia del otro
+
+#### Scenario: El nombre de un proyecto compartido es inequívoco
+- **Given** un proyecto `shared` con slug `api`
+- **When** se intenta crear otro `shared` con el mismo slug
+- **Then** la operación es rechazada
+- **And** el slug sigue resolviendo a un único proyecto compartido
+
+#### Scenario: El mismo repositorio no genera un proyecto duplicado en silencio
+- **Given** un proyecto `shared` cuyo remoto es `R`
+- **When** un usuario sin membresía abre una copia local de `R`
+- **Then** el sistema le ofrece solicitar acceso al proyecto existente
+- **And** no lo agrega como miembro por su cuenta
+- **And** no crea un segundo proyecto para el mismo remoto sin decirlo
 
 ---
 

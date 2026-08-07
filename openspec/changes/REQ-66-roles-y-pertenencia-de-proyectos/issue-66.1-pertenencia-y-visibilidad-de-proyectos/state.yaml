@@ -3,8 +3,20 @@ created: 2026-08-07
 archived: ~
 # Fundacional del REQ-66: las otras cinco issues dependen de esta.
 # Cubre REQ-1, REQ-2 y REQ-3 del spec del padre.
-# DECISION ABIERTA que conviene confirmar con el usuario antes de implementar: el default de
-# visibility. La propuesta es 'shared' porque los 25 proyectos existentes se crearon cuando no
-# habia concepto de privacidad, y marcarlos 'personal' los volveria invisibles para un segundo
-# usuario futuro sin que nadie lo decida — y al ser invisibles, nadie notaria el error.
+#
+# DEFAULT DECIDIDO POR EL USUARIO (2026-08-07): un proyecto NUEVO nace 'personal'; los 25 que YA
+# existen van a 'shared' en el backfill. Son dos decisiones distintas: compartir es un acto
+# deliberado, pero los existentes se crearon sin concepto de privacidad y ya tienen slug y repo.
+# El backfill no puede romper nada HOY porque el unico usuario tiene rol global owner y ve todo;
+# importa recien cuando aparezca el segundo.
+#
+# HALLAZGO QUE AGRANDO ESTA ISSUE (medido al validar el default): el slug YA NO ES UNICO — la
+# constraint se fue con organization_id en REQ-21.6 y la unica que queda es projects_pkey. Peor:
+# session_bootstrap_tools.go:665 hace idempotencia por slug y DEVUELVE EL PROYECTO AJENO ENTERO.
+# Con proyectos personales eso es una fuga directa, y no es hipotetica: los proyectos se
+# auto-registran desde session_bootstrap cada vez que alguien abre un directorio nuevo.
+#
+# SOLUCION ESCRITA: indices parciales — UNIQUE(slug) WHERE shared y UNIQUE(owner_id, slug) WHERE
+# personal — mas idempotencia resuelta SOLO entre lo visible. La identidad fuerte es el REMOTO,
+# no el slug.
 req_parent: REQ-66-roles-y-pertenencia-de-proyectos

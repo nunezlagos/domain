@@ -292,9 +292,18 @@ fi
 # A diferencia de las credenciales de arriba, se SOBRESCRIBE siempre: cada deploy despliega
 # un commit distinto, y preservarlo dejaría el .env sellado con la versión del primer deploy.
 #
-# --exact-match es el mismo criterio que install-user/Makefile, para que server y cliente
-# hablen el mismo idioma: sin un tag EN HEAD el valor cae a 'dev' y no finge ser una release.
-DEPLOY_VERSION=$(git -C "$INSTALL_DIR" describe --tags --exact-match 2>/dev/null || echo dev)
+# EL CRITERIO ES EL MISMO QUE services/Makefile:17, y esa igualdad es el punto: el Makefile
+# define VERSION y hace `export`, y este script llama `make build`, así que en el camino real
+# GANA el valor de make. Este de acá cubre el camino manual —el `docker compose build` sin
+# make que se sugiere al final—, y con dos expresiones distintas el valor efectivo dependería
+# de por dónde se entró. Hay un chequeo en install-version-stamp_test.sh que compara las dos.
+#
+# --always da el SHA cuando no hay tag: informa qué corre en prod sin fingir una release, que
+# el cliente descarta igual porque solo sabe ordenar dígitos separados por puntos. --dirty
+# marca los builds hechos sobre un árbol tocado a mano. NO es el criterio del CLIENTE
+# (install-user/Makefile usa --exact-match): ahí un binario que no está en un tag debe
+# declararse 'dev' para quedar fuera de la comparación.
+DEPLOY_VERSION=$(git -C "$INSTALL_DIR" describe --tags --always --dirty 2>/dev/null || echo dev)
 DEPLOY_COMMIT=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)
 env_set VERSION "$DEPLOY_VERSION" "$ENV_FILE"
 env_set COMMIT "$DEPLOY_COMMIT" "$ENV_FILE"

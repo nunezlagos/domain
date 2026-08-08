@@ -2,11 +2,15 @@
 Description=domain-services — auto-deploy del último tag v* publicado
 Requires=docker.service
 After=docker.service domain-services.service
+OnFailure=domain-auto-deploy-alert.service
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/services
 EnvironmentFile=/opt/services/.env
+# systemd NO define HOME para un servicio de sistema sin User=, y sin HOME git no lee
+# el safe.directory de /root/.gitconfig y aborta con "dubious ownership" (exit 128)
+Environment=HOME=/root
 ExecStart=/opt/services/scripts/auto-deploy-check.sh
 # el ciclo normal no despliega nada; cuando sí lo hace, construye imágenes y espera health
 TimeoutStartSec=1800

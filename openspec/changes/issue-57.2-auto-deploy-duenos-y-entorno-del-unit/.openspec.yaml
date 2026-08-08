@@ -1,0 +1,14 @@
+schema: spec-driven
+domain:
+  issue_id: 26256291-6b56-4941-aae5-c8e22e882117
+  issue_slug: issue-57.2-auto-deploy-duenos-y-entorno-del-unit
+  req: REQ-57-sincronizacion-de-versiones
+  status: proposed
+  priority: high
+  proposal_version: 0
+  design_version: 0
+hashes:
+  "proposal.md": 8005e8e4d8d1477d86dcb515a00d1c4f23ad7e5784c9c2b25621800d13e00466
+  "design.md": e36c574a290080de1a23a9a85a54e01510e408a3ba12f39daed2036364b94667
+  "tasks.md": bc8f1d86b47378866225b4e25fdcbab1a8db566a2ce0adce267a507c328c7357
+  "specs/issue-57.2-auto-deploy-duenos-y-entorno-del-unit/spec.md": 7f9e44a9b63cb019449df4f2736b0a62527e422d5222e6ec6d4c3e4b734f1737

@@ -113,3 +113,27 @@ domain_log_hook_error() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$ts" "$1" "${2:-?}" "${3:-?}" "$detail" >> "$dir/hook-errors.log" 2>/dev/null
   return 0
 }
+
+# domain_test_cmd_sugerido <dir> — DOMAINSERV-265. El comando de tests que
+# corresponde al stack de <dir>, o vacío si no se reconoce ninguno.
+#
+# Vive acá y no en el pre-edit porque el post-test ya acepta 8 runners y el
+# pre-edit hablaba de uno solo: esa divergencia entre las dos puntas del gate ES
+# el bug. Un repo Node recibía "corré go test", concluía que el gate no soportaba
+# su stack, y se iba al bypass con la suite perfectamente ejecutable.
+#
+# Vacío NO significa "usá go test": significa que el mensaje debe admitir que no
+# sabe, para que el bypass sea una decisión informada y no un reflejo.
+domain_test_cmd_sugerido() {
+  local dir="${1:-}"
+  [ -n "$dir" ] && [ -d "$dir" ] || return 0
+  # go primero: el gate ya trata a Go distinto del resto al medir el alcance de
+  # una corrida (DOMAINSERV-237), así que en un monorepo mixto manda el mismo eje
+  [ -f "$dir/go.mod" ]         && { printf 'go test -count=1 ./...'; return 0; }
+  [ -f "$dir/package.json" ]   && { printf 'npm test'; return 0; }
+  [ -f "$dir/pyproject.toml" ] && { printf 'pytest'; return 0; }
+  [ -f "$dir/Cargo.toml" ]     && { printf 'cargo test'; return 0; }
+  [ -f "$dir/composer.json" ]  && { printf 'phpunit'; return 0; }
+  [ -f "$dir/Gemfile" ]        && { printf 'rspec'; return 0; }
+  return 0
+}

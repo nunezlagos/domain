@@ -1287,10 +1287,21 @@ if faltan:
         default|plan) commit_dec="ask" ;;
         *)            commit_dec="deny" ;;
       esac
-      if [ -n "${gate_motivo_alcance:-}" ]; then
-        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-237): la corrida de tests NO cubrió estos archivos: ${gate_motivo_alcance}. Lo que SÍ se corrió fue: ${gate_alcance_corrido:-(alcance no registrado)}, y lo corrió: ${gate_origen_corrida:-(origen no registrado — marker anterior a DOMAINSERV-245)}. Que el código no haya cambiado desde la corrida no prueba que la corrida lo haya evaluado, y que el marker exista no prueba que su corrida cubra ESTE commit — puede haberlo escrito un subagente que corrió otra suite (DOMAINSERV-245). Corré la suite recursiva del módulo que los contiene, con -count=1 y sin -run: \`go test -count=1 ./...\` desde la raíz del módulo. Si de verdad no se pueden correr acá, autorizá UN commit con: echo 'tu razón' > $bypass"
+      # DOMAINSERV-265: el mensaje sale del stack REAL del repo. Hardcodear `go test`
+      # en un repo Node hacía que se leyera "el gate no soporta este stack" y se fuera
+      # al bypass con la suite ejecutable. Vacío = no lo reconocemos, y hay que decirlo:
+      # un bypass informado vale más que uno por reflejo.
+      gate_raiz=$(git rev-parse --show-toplevel 2>/dev/null)
+      gate_cmd_tests=$(domain_test_cmd_sugerido "$gate_raiz")
+      if [ -n "$gate_cmd_tests" ]; then
+        gate_como_correr="Corré la suite con \`$gate_cmd_tests\`."
       else
-        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. Corré la suite con \`go test -count=1 ./...\` (el -count=1 es obligatorio: sin él la corrida puede venir entera del cache y no evalúa nada). Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit con: echo 'tu razón' > $bypass"
+        gate_como_correr="No pude determinar cómo se corren los tests en este repo (no encontré go.mod, package.json, pyproject.toml, Cargo.toml, composer.json ni Gemfile). Si tu suite es de otro tipo —por ejemplo scripts de shell— el gate no la reconoce y el bypass es la vía correcta."
+      fi
+      if [ -n "${gate_motivo_alcance:-}" ]; then
+        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-237): la corrida de tests NO cubrió estos archivos: ${gate_motivo_alcance}. Lo que SÍ se corrió fue: ${gate_alcance_corrido:-(alcance no registrado)}, y lo corrió: ${gate_origen_corrida:-(origen no registrado — marker anterior a DOMAINSERV-245)}. Que el código no haya cambiado desde la corrida no prueba que la corrida lo haya evaluado, y que el marker exista no prueba que su corrida cubra ESTE commit — puede haberlo escrito un subagente que corrió otra suite (DOMAINSERV-245). Corré la suite recursiva que los contiene, sin acotarla a un subconjunto. ${gate_como_correr} Si de verdad no se pueden correr acá, autorizá UN commit escribiendo la razón en un comando SEPARADO del git commit (con && el hook inspecciona antes de que exista el archivo y deniega igual): echo 'tu razón' > $bypass"
+      else
+        emit_decision "$commit_dec" "domain commit-gate (DOMAINSERV-74): no hay corrida de tests que cubra el estado actual del código. El marker tests-ok falta, expiró (30 min) o el working tree cambió después de los tests. ${gate_como_correr} Si los tests no se pueden correr acá (dependen de VPN, de un servicio externo, o el contenido ya viene testeado aguas arriba), autorizá UN commit escribiendo la razón en un comando SEPARADO del git commit (con && el hook inspecciona antes de que exista el archivo y deniega igual): echo 'tu razón' > $bypass"
       fi
     fi
   fi

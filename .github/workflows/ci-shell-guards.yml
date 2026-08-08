@@ -60,8 +60,11 @@ jobs:
         run: |
           set -euo pipefail
           esperadas=$(cat <<'EOF'
+          scripts/tests/test_auto_deploy_alerta.sh
           scripts/tests/test_auto_deploy_check.sh
+          scripts/tests/test_auto_deploy_entorno.sh
           scripts/tests/test_deploy.sh
+          scripts/tests/test_install_normaliza_duenos.sh
           scripts/tests/test_orchestrator.sh
           scripts/tests/test_path_filters.sh
           services/caddy/caddyfile-scan-fingerprint_test.sh
@@ -98,12 +101,19 @@ jobs:
             exit 1
           fi
 
-      - name: Correr las 12 suites
+      # OJO con test_auto_deploy_entorno.sh: su test que de verdad discrimina el fix necesita
+      # root (chown para que el dueño difiera del euid, y systemd-run en scope system). Sin
+      # privilegios SKIPea y el job queda verde SIN haber verificado nada — el mismo falso
+      # verde que DOMAINSERV-258 combate. La verificación real de ese fix es contra el VPS.
+      - name: Correr las 15 suites
         run: |
           set -uo pipefail
           fallidas=""
           for s in \
+            scripts/tests/test_auto_deploy_alerta.sh \
             scripts/tests/test_auto_deploy_check.sh \
+            scripts/tests/test_auto_deploy_entorno.sh \
+            scripts/tests/test_install_normaliza_duenos.sh \
             scripts/tests/test_deploy.sh \
             scripts/tests/test_orchestrator.sh \
             scripts/tests/test_path_filters.sh \

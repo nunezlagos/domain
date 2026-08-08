@@ -1,0 +1,15 @@
+[Unit]
+Description=domain-services — alerta ntfy cuando el auto-deploy falla
+After=domain-auto-deploy.service
+# la dispara OnFailure= de domain-auto-deploy.service, no un target: por eso no lleva
+# sección [Install] ni hay que habilitarla
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/services/services
+EnvironmentFile=/opt/services/.env
+# sin HOME git no puede leer la excepción safe.directory de /root/.gitconfig: es la mitad
+# del bug que tuvo al auto-deploy fallando en cada ciclo (DOMAINSERV-258)
+Environment=HOME=/root
+ExecStart=/opt/services/services/scripts/auto-deploy-alert.sh
+TimeoutStartSec=60

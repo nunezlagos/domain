@@ -25,6 +25,9 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/services}"
 REPO_URL="${REPO_URL:-https://github.com/nunezlagos/domain.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
+# quién queda como dueño del árbol: el humano que corrió el one-liner, no root. El instalador
+# se invoca con sudo, así que SUDO_USER es ese humano; sin él caemos al usuario del VPS
+INSTALL_OWNER="${INSTALL_OWNER:-${SUDO_USER:-sysadmin}}"
 
 # Si el script no se corre como root pero SUDO_PASSWORD está seteada,
 # usamos sudo -S (lee password de stdin). Útil para VPS donde el user
@@ -787,6 +790,19 @@ source "$INSTALL_DIR/services/scripts/config-drift.sh"
 sync_config_drift
 if (( DRIFT_RECREATED == 0 && DRIFT_UNRESOLVED == 0 && DRIFT_UNVERIFIED == 0 )); then
   ok "todas las configs montadas coinciden con el disco"
+fi
+
+# Va acá y no en el STEP 3 a propósito: el .env (STEP 4) y los certs (STEP 5) se escriben
+# como root DESPUÉS del repo, así que normalizar antes dejaría justo esos afuera. DOMAINSERV-258.
+source "$INSTALL_DIR/services/scripts/normalizar-duenos.sh"
+if normalizar_duenos "$INSTALL_DIR" "$INSTALL_OWNER"; then
+  if (( DUENOS_CAMBIADOS > 0 )); then
+    ok "propiedad normalizada a $INSTALL_OWNER ($DUENOS_CAMBIADOS rutas cambiadas)"
+  else
+    ok "propiedad ya consistente ($INSTALL_OWNER)"
+  fi
+else
+  warn "no se pudo normalizar la propiedad de $INSTALL_DIR: sysadmin puede quedar sin poder operar el repo"
 fi
 
 # === STEP 7: Systemd units + timers ===

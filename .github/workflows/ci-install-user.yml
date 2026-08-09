@@ -46,6 +46,14 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # bootstrap_ps1_release_test.go ejecuta bootstrap.ps1 con PowerShell Core sobre este
+      # mismo runner Linux: es la única forma de cubrir el .ps1 sin pagar un runner Windows.
+      # Si la imagen dejara de traer pwsh, el job tiene que morir acá con la causa a la vista
+      # — el test ya hace t.Fatal cuando CI está seteado, pero este step lo dice en una línea
+      # en vez de en un stack de Go.
+      - name: PowerShell disponible (bootstrap.ps1 se testea sin Windows)
+        run: pwsh --version
+
       - name: go test
         run: go test -count=1 ./...
 

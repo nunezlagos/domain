@@ -3,9 +3,9 @@ name: release-installer
 # REQ-54: build cross-platform del binario domain-install y publica como
 # GitHub Release. Se dispara con push de tag v*.
 #
-# El bootstrap.sh/ps1 puede entonces (futuro) bajar el binario directo en
-# vez de instalar Go + compilar. Por ahora bootstrap mantiene el path de
-# "instalar Go local + compile" como fallback robusto.
+# bootstrap.sh (issue-57.1 fase 2) y bootstrap.ps1 (DOMAINSERV-271) bajan estos assets y los
+# verifican contra SHA256SUMS.txt; "instalar Go local + compilar" quedó como FALLBACK para las
+# arquitecturas que esta matriz no publica y para cuando la descarga falla.
 
 on:
   push:

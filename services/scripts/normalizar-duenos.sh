@@ -55,9 +55,15 @@ normalizar_duenos() {
   # recorrido en vez de lo cambiado haría que la segunda corrida reporte trabajo inexistente.
   # el loop en vez de `find -exec` o `xargs`: así el paso queda verificable con un chown
   # stubeado, que es la única forma de probarlo sin ser root
+  # -h opera sobre el enlace y no sobre su referente. Sin él pasan dos cosas, ambas medidas
+  # en el VPS el 2026-08-09: los symlinks (los .env por servicio, services/certs) conservan
+  # su dueño para siempre porque el chown se lo cambia al target, así que el criterio de
+  # "dueño único" es inalcanzable; y services/certs -> ../certs se atraviesa, con lo que el
+  # -prune de acá abajo deja de proteger nada. El dueño de un symlink no gobierna el acceso
+  # —eso lo decide el target—, así que -h no afloja ningún permiso.
   local cambios ruta
   cambios="$(find "$dir" -path "$dir/certs" -prune -o -print 2>/dev/null \
-    | while IFS= read -r ruta; do chown -c "$dueno" "$ruta" 2>/dev/null; done)" || return 1
+    | while IFS= read -r ruta; do chown -ch "$dueno" "$ruta" 2>/dev/null; done)" || return 1
   DUENOS_CAMBIADOS="$(printf '%s' "$cambios" | grep -c . || true)"
 
   return 0

@@ -72,16 +72,19 @@ printf '%s\n' "$*" >> "$CHOWN_LOG"
 
 recursivo=0
 cambios=0
+sin_deref=0
 spec=""
 rutas=()
 for arg in "$@"; do
   case "$arg" in
     --recursive) recursivo=1 ;;
     --changes|--verbose) cambios=1 ;;
+    --no-dereference) sin_deref=1 ;;
     --*) ;;
     -*)
       [[ "$arg" == *R* ]] && recursivo=1
       [[ "$arg" == *c* || "$arg" == *v* ]] && cambios=1
+      [[ "$arg" == *h* ]] && sin_deref=1
       ;;
     *)
       if [[ -z "$spec" ]]; then spec="$arg"; else rutas+=("$arg"); fi
@@ -109,6 +112,13 @@ for ruta in "${rutas[@]}"; do
     mapfile -t objetivos < <(find "$ruta" 2>/dev/null)
   fi
   for objetivo in "${objetivos[@]}"; do
+    # la semántica que importa: sin -h, chown SIGUE el symlink y le cambia el dueño al
+    # TARGET, dejando el enlace con su dueño original para siempre. Con -h opera sobre el
+    # enlace mismo. Modelarlo es lo que permite medir la diferencia con un stub.
+    if [[ -L "$objetivo" ]] && (( ! sin_deref )); then
+      objetivo="$(readlink -f "$objetivo" 2>/dev/null)" || continue
+      [[ -n "$objetivo" && "$objetivo" == "$WORK_PRUEBA"/* ]] || continue
+    fi
     actual=$(awk -F'\t' -v p="$objetivo" '$1==p{v=$2} END{print v}' "$REGISTRO")
     [[ "$actual" == "$dueno" ]] && continue
     printf '%s\t%s\n' "$objetivo" "$dueno" >> "$REGISTRO"
@@ -190,6 +200,21 @@ crear_arbol() {
             "$dir/services/monitoring/prometheus.yml" \
             "$dir/services/monitoring/loki-config.yml"
   chmod 755 "$dir/scripts/deploy.sh"
+}
+
+# Réplica del layout REAL del VPS, medido el 2026-08-09: los per-service .env son symlinks
+# a ../../.env y services/certs es un symlink a ../certs. Va aparte de crear_arbol porque
+# certs/ está pruneado del recorrido, y los tests que exigen "ninguna ruta con otro dueño"
+# sobre el árbol entero no aplican acá.
+crear_arbol_con_symlinks() {
+  local dir="$1"
+  crear_arbol "$dir"
+  mkdir -p "$dir/certs/postgres" "$dir/services/domain-mcp"
+  printf -- '-----BEGIN\n' > "$dir/certs/postgres/server.key"
+  chmod 600 "$dir/certs/postgres/server.key"
+  ln -sfn ../certs      "$dir/services/certs"
+  ln -sfn ../../.env    "$dir/services/domain-mcp/.env"
+  ln -sfn ../.env       "$dir/services/.env"
 }
 
 # Estado inicial del VPS medido: todo el árbol en manos de root.
@@ -352,6 +377,55 @@ TestInstall_Normaliza_NoCambiaModos() {
   assert_eq "el script sigue ejecutable" "755" "$(stat -c '%a' "$repo/scripts/deploy.sh")"
 }
 
+# El MUST-3 exige `find $INSTALL_DIR ! -user <dueño> | wc -l` == 0, y en el VPS da 9. Ocho
+# de esos nueve son symlinks: `chown` sin -h sigue el enlace y le cambia el dueño al TARGET,
+# así que el enlace conserva el suyo POR SIEMPRE y el criterio es inalcanzable por
+# construcción. Medido el 2026-08-09 en producción: services/domain-mcp/.env quedó root:root
+# mientras /opt/services/.env quedaba sysadmin:sysadmin.
+#
+# Y ese mismo seguimiento abre un agujero peor: services/certs es un symlink a ../certs, o
+# sea que el chown lo atraviesa y alcanza el directorio que el -prune excluye. Que postgres
+# sobreviviera fue suerte —tocó el dir, no server.key— y no diseño. -h cierra los dos.
+TestInstall_Normaliza_NoSigueSymlinks() {
+  cargar_lib || { fail "la lib no está: fase roja"; return; }
+  preparar symlinks
+  local repo="$REPO_PRUEBA"
+  crear_arbol_con_symlinks "$repo"
+  sembrar_duenos "$repo" "$DUENO_PREVIO"
+
+  correr_normalizacion "$repo" "$DUENO_DESTINO"
+  assert_eq "exit 0" "0" "$RC"
+
+  local enlace ajenos=""
+  for enlace in "$repo/services/.env" "$repo/services/domain-mcp/.env" "$repo/services/certs"; do
+    [[ "$(dueno_de "$enlace")" == "$DUENO_DESTINO" ]] || ajenos+="$enlace($(dueno_de "$enlace")) "
+  done
+  assert_eq "los symlinks cambian de dueño ellos mismos" "" "$ajenos"
+
+  # los asserts de arriba y de abajo miden el EFECTO, que es el criterio de esta suite.
+  # Este mide la FORMA a propósito y es el único así: sirve para distinguir "la lib no
+  # dereferencia" de "el stub dejó de modelar la dereferencia", que darían lo mismo en el
+  # efecto y son bugs opuestos. El regex acepta -h suelto, agrupado (-ch, -hc) o largo.
+  local invocaciones; invocaciones="$(chown_invocaciones)"
+  if grep -qE '(^|[[:space:]])(--no-dereference|-[a-gi-zA-Z]*h[a-zA-Z]*)([[:space:]]|$)' \
+       <<<"$invocaciones"; then
+    pass "el chown pide explícitamente no dereferenciar"
+  else
+    fail "ninguna invocación pide -h/--no-dereference: $invocaciones"
+  fi
+
+  # certs/ está fuera del recorrido de find; si el chown atraviesa services/certs, el
+  # -prune deja de valer y el paso vuelve a poder tumbar postgres
+  assert_eq "el -prune de certs/ no se evade por el symlink" \
+    "$DUENO_PREVIO" "$(dueno_de "$repo/certs")"
+  assert_eq "server.key nunca se toca" \
+    "$DUENO_PREVIO" "$(dueno_de "$repo/certs/postgres/server.key")"
+
+  # el .env real es el target de tres enlaces: si el chown lo siguiera, cambiaría de dueño
+  # tantas veces como enlaces haya y el conteo de la idempotencia mentiría
+  assert_eq ".env sigue en 600 tras normalizar" "600" "$(stat -c '%a' "$repo/.env")"
+}
+
 # === runner ===
 
 TESTS=(
@@ -360,6 +434,7 @@ TESTS=(
   TestInstall_InstallDirVacio_AbortaSinChown
   TestInstall_InstallDirRelativo_AbortaSinChown
   TestInstall_Normaliza_NoCambiaModos
+  TestInstall_Normaliza_NoSigueSymlinks
 )
 
 for test_actual in "${TESTS[@]}"; do

@@ -57,5 +57,11 @@ fmt:
 vet:
 	go vet ./...
 
+# DOMAINSERV-250: el `|| true` descartaba el exit code, así que `make test` salía 0 con la
+# suite en rojo. Un target de tests que nunca falla no es un target de tests.
+# El -count=1 tampoco es cosmético acá: version_test.go lee archivos de FUERA del módulo con
+# paths relativos (../.github/workflows/*.yml), y Go no los rastrea para invalidar el cache,
+# así que la suite puede venir entera del cache sin evaluar nada. Es el mismo falso verde que
+# ci-mcp.yml ya documenta y por el que ci-install-user.yml corre con -count=1.
 test:
-	go test ./... 2>&1 || true
+	go test -count=1 ./...

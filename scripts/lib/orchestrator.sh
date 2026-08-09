@@ -28,7 +28,11 @@ validate_env_no_laxo() {
   local env_file="${DEPLOY_ENV_FILE:-${RUNTIME_DIR:-.}/services/.env}"
   [[ -f "$env_file" ]] || { log_phase "validate: .env ausente ($env_file)"; return 1; }
 
-  local modo; modo="$(stat -c '%a' "$env_file" 2>/dev/null)" \
+  # -L dereferencia: en producción services/.env es un symlink a ../.env, y el modo de un
+  # symlink es SIEMPRE 777 en Linux, sin relación con lo que apunta. Sin -L el check
+  # clasificaba como laxo un .env que está en 600. Lo que importa es el archivo que
+  # guarda los secretos, no el enlace que lleva hasta él.
+  local modo; modo="$(stat -Lc '%a' "$env_file" 2>/dev/null)" \
     || { log_phase "validate: no se pudo leer el modo de $env_file"; return 1; }
   # los dos últimos dígitos son group y other; 2,3,6,7 son los que llevan el bit de escritura
   if [[ "${modo: -2}" =~ [2367] ]]; then

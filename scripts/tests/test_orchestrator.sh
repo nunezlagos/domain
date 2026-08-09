@@ -104,6 +104,29 @@ for caso in "600:0:el modo de produccion, escribible por su dueño" \
   assert_rc "validate: .env $modo ($glosa) -> rc $esperado" "$esperado" "$rc"
 done
 
+# En producción `services/.env` es un SYMLINK a `../.env`, y el modo de un symlink en
+# Linux es SIEMPRE 777 sin importar a qué apunte. `stat` sin -L reporta el modo del
+# ENLACE, así que el check clasificaba como laxo un .env real que está en 600. Medido:
+# "validate: .env laxo (modo 777, escribible por group u other) — abort" contra un
+# /opt/services/.env que es sysadmin:sysadmin 600.
+# Lo que importa es el archivo que guarda los secretos, no el enlace que lleva a él.
+mkdir -p "$WORK/c2b/services"
+printf 'DOMAIN_FIELD_ENC_KEY=abc\n' > "$WORK/c2b/.env"
+chmod 600 "$WORK/c2b/.env"
+ln -sfn ../.env "$WORK/c2b/services/.env"
+rc=0
+DEPLOY_ENV_FILE="$WORK/c2b/services/.env" validate_env_no_laxo || rc=$?
+assert_rc "validate: symlink a un .env 600 -> rc 0 (el 777 del enlace no cuenta)" 0 "$rc"
+
+# y el complemento: seguir el enlace tiene que SERVIR para algo, no solo para pasar
+mkdir -p "$WORK/c2c/services"
+printf 'DOMAIN_FIELD_ENC_KEY=abc\n' > "$WORK/c2c/.env"
+chmod 666 "$WORK/c2c/.env"
+ln -sfn ../.env "$WORK/c2c/services/.env"
+rc=0
+DEPLOY_ENV_FILE="$WORK/c2c/services/.env" validate_env_no_laxo || rc=$?
+assert_rc "validate: symlink a un .env 666 -> rc 1 (el laxo real se detecta igual)" 1 "$rc"
+
 # el otro motivo de aborto sigue vivo y no se lo tapa el cambio de criterio
 ruta_sin_key="$(env_de_prueba c3 600)"
 printf 'OTRA=cosa\n' > "$ruta_sin_key"

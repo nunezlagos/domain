@@ -1,0 +1,11 @@
+schema: spec-driven
+domain:
+  extends_issue_slug: issue-57.2-auto-deploy-duenos-y-entorno-del-unit
+  extends_issue_id: 26256291-6b56-4941-aae5-c8e22e882117
+  req: REQ-57-sincronizacion-de-versiones
+  status: proposed
+  priority: medium
+  proposal_version: 0
+hashes:
+  "proposal.md": 546ab99e118fb2e5cce980be9a6bbcb7ecdf4a33256acc48faf2240fdc9b7033
+  "specs/fix-alerta-del-auto-deploy-accionable/spec.md": babfc3dabd46f8f358726050d31ed8b931a0d02757054386555227b75e6582d1

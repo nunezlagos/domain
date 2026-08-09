@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -410,20 +411,34 @@ func (h *orchestrateHandlers) flowActivoParaGrant(ctx context.Context, flowRunID
 	return ""
 }
 
-// allowedPathsDelRequest extrae los globs descartando los vacíos y lo que no sea string. La
-// validación de su gramática es aparte, en flowsvc.ValidarAllowlist: acá solo se normaliza.
-func allowedPathsDelRequest(req mcp.CallToolRequest) []string {
-	raw, ok := req.GetArguments()["allowed_paths"].([]any)
+// allowedPathsDelRequest extrae los globs. La validación de su gramática es aparte, en
+// flowsvc.ValidarAllowlist: acá solo se normaliza.
+//
+// DOMAINSERV-256: no puede colapsar "no declaró scope" con "declaró scope y llegó roto". El
+// primero es el flow normal y significa "sin restricción de path"; el segundo, tratado igual,
+// firma un token SIN restricción para un agente que creyó estar confinado, y no avisa a nadie.
+// El fail-open era invisible justamente porque el server no devuelve la allowlist en el eco:
+// se detectó decodificando el claim `p` del marker, no leyendo la respuesta del tool.
+func allowedPathsDelRequest(req mcp.CallToolRequest) ([]string, error) {
+	v, presente := req.GetArguments()["allowed_paths"]
+	if !presente || v == nil {
+		return nil, nil
+	}
+	raw, ok := v.([]any)
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("allowed_paths llegó como %T y el contrato es un array de strings: "+
+			"tratarlo como 'sin scope' firmaría un token sin restricción de path en silencio", v)
 	}
-	var out []string
-	for _, p := range raw {
-		if s, ok := p.(string); ok && s != "" {
-			out = append(out, s)
+	out := make([]string, 0, len(raw))
+	for i, p := range raw {
+		s, ok := p.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			return nil, fmt.Errorf("allowed_paths[%d] no es un glob no vacío (%T): descartarlo "+
+				"achicaría el territorio declarado sin avisar", i, p)
 		}
+		out = append(out, s)
 	}
-	return out
+	return out, nil
 }
 
 // scopeDelFlowRun deriva el proyecto del flow_run y deja el GUC seteado. Hace falta un camino
@@ -485,7 +500,10 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	allowedPaths := allowedPathsDelRequest(req)
+	allowedPaths, err := allowedPathsDelRequest(req)
+	if err != nil {
+		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
+	}
 
 	// El glob se valida al EMITIR y no al editar (DOMAINSERV-218). Un "**/*.go"
 	// tiene scope vacío: como allowlist de batch-mode no acota nada, y hace que

@@ -76,8 +76,22 @@ print("flow_run_id=%s" % shlex.quote(fr))
 print("flow_mode=%s" % shlex.quote(mode))
 # DOMAINSERV-110 batch-mode: allowed_paths viene del tool_input de domain_orchestrate
 # (globs de scope). En phase_result/confirm no está → [] (el gate no restringe path).
-ap = ti.get("allowed_paths") if isinstance(ti.get("allowed_paths"), list) else []
-print("allowed_paths_json=%s" % shlex.quote(json.dumps([p for p in ap if isinstance(p, str) and p])))
+#
+# DOMAINSERV-256: "ausente" y "presente pero roto" NO son lo mismo. El primero es el flow
+# normal; el segundo significa que alguien creyó declarar una partición y no la declaró.
+# Colapsar los dos a [] emitía un token sin restricción de path en silencio, y del lado
+# cliente eso ni se veía: el server no devuelve la allowlist en el eco.
+ap_raw = ti.get("allowed_paths", None)
+ap_error = ""
+if ap_raw is None:
+    ap = []
+elif isinstance(ap_raw, list) and all(isinstance(p, str) and p.strip() for p in ap_raw):
+    ap = ap_raw
+else:
+    ap = []
+    ap_error = "allowed_paths declarado pero no es un array de strings no vacios: %r" % (ap_raw,)
+print("allowed_paths_json=%s" % shlex.quote(json.dumps(ap)))
+print("allowed_paths_error=%s" % shlex.quote(ap_error))
 ' 2>/dev/null)"
 
 [ -n "$session_id" ] || exit 0
@@ -108,6 +122,18 @@ case "$tool_name" in
 esac
 
 [ -n "$flow_run_id" ] || exit 0
+
+# DOMAINSERV-256: si se declaró scope y llegó roto, NO se emite token. Sin marker el
+# pre-edit deniega toda edición: fail-CLOSED, que para un gate de aislamiento es el lado
+# seguro. Solo aplica al caso ROTO — el flow que no declara partición (ap_error vacío)
+# sigue exactamente igual que antes, que es lo que evita volver el gate insatisfacible.
+if [ -n "${allowed_paths_error:-}" ]; then
+  printf 'domain (DOMAINSERV-256): %s. NO se emitio token de edicion: volve a llamar domain_orchestrate con allowed_paths como array de strings.\n' "$allowed_paths_error" >&2
+  LIBERR="$(dirname "$0")/domain-hooks-lib.sh"
+  # shellcheck source=/dev/null
+  [ -r "$LIBERR" ] && . "$LIBERR" && domain_log_hook_error "post-orchestrate" "$session_id" "allowed_paths_tipo" "$allowed_paths_error" 2>/dev/null
+  exit 0
+fi
 
 # try to get HMAC token from server
 LIB="$(dirname "$0")/domain-hooks-lib.sh"

@@ -79,3 +79,78 @@ func TestHandleFlowGrantToken_SinAllowlist_EmiteElToken(t *testing.T) {
 
 	require.False(t, res.IsError, "sin allowlist = flow normal sin batch-mode, tiene que pasar")
 }
+
+// DOMAINSERV-256: el fail-open que ningún test veía. allowedPathsDelRequest hacía un type
+// assert a []any y devolvía nil ante cualquier otra cosa — o sea "sin restricción de path".
+// Un cliente que serializara la allowlist como string JSON recibía un token SIN scope
+// creyendo estar confinado, y no había forma de notarlo desde la respuesta del tool: el
+// server no la eco. Se detectó decodificando el claim `p` del marker.
+//
+// grantToken() no sirve acá: arma el array bien tipado a propósito. Estos casos tienen que
+// meter la basura cruda en los argumentos.
+func grantTokenCrudo(t *testing.T, h *orchestrateHandlers, flowRunID string, allowed any) *mcp.CallToolResult {
+	t.Helper()
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		"flow_run_id":   flowRunID,
+		"session_id":    testSessionID,
+		"allowed_paths": allowed,
+	}
+	res, err := h.handleFlowGrantToken(context.Background(), req)
+	require.NoError(t, err)
+	return res
+}
+
+func TestHandleFlowGrantToken_AllowedPathsComoString_EsErrorYNoEmite(t *testing.T) {
+	h, fid := handlerConFlowActivo(t)
+
+	res := grantTokenCrudo(t, h, fid, "services/domain-mcp/**")
+
+	require.True(t, res.IsError, "un allowed_paths mal tipado NO puede degradar a 'sin scope' en silencio")
+	tc, ok := res.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, tc.Text, "array de strings")
+	// el error explica el modo de falla, no solo que rechazó: sin esto el mensaje sería
+	// "input inválido" y el cliente que serializa mal no sabría qué corregir
+	require.Contains(t, tc.Text, "sin restricción de path")
+}
+
+func TestHandleFlowGrantToken_AllowedPathsConItemNoString_EsErrorYNoEmite(t *testing.T) {
+	h, fid := handlerConFlowActivo(t)
+
+	res := grantTokenCrudo(t, h, fid, []any{"services/domain-mcp/**", 42})
+
+	require.True(t, res.IsError, "descartar el item inválido achicaría el territorio declarado sin avisar")
+	tc, ok := res.Content[0].(mcp.TextContent)
+	require.True(t, ok)
+	require.Contains(t, tc.Text, "allowed_paths[1]")
+}
+
+func TestHandleFlowGrantToken_AllowedPathsConStringVacio_EsError(t *testing.T) {
+	h, fid := handlerConFlowActivo(t)
+
+	res := grantTokenCrudo(t, h, fid, []any{"services/domain-mcp/**", "   "})
+
+	require.True(t, res.IsError, "un glob en blanco es territorio declarado que se perdería")
+}
+
+// La otra mitad, y la que hace seguro el cambio: ausente sigue significando "sin
+// restricción". Si esto se rompe, todo flow que no declara partición deja de poder editar.
+func TestHandleFlowGrantToken_AllowedPathsAusente_SigueEmitiendo(t *testing.T) {
+	h, fid := handlerConFlowActivo(t)
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{"flow_run_id": fid, "session_id": testSessionID}
+	res, err := h.handleFlowGrantToken(context.Background(), req)
+	require.NoError(t, err)
+
+	require.False(t, res.IsError, "ausente = flow normal: no puede empezar a fallar")
+}
+
+func TestHandleFlowGrantToken_AllowedPathsNil_SigueEmitiendo(t *testing.T) {
+	h, fid := handlerConFlowActivo(t)
+
+	res := grantTokenCrudo(t, h, fid, nil)
+
+	require.False(t, res.IsError, "un nil explícito es 'no declaré scope', no 'declaré y llegó roto'")
+}

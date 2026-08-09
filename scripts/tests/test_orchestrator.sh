@@ -2,7 +2,7 @@
 # scripts/tests/test_orchestrator.sh
 #
 # TDD green/red para HU 38.12 — valida el orquestador deploy.sh.
-# Cubre: log_phase, validate_env_readonly, should_rollback y un smoke
+# Cubre: log_phase, validate_env_no_laxo, should_rollback y un smoke
 # del flujo completo en --dry-run contra un repo fake para no tocar
 # Docker.
 #
@@ -61,26 +61,56 @@ assert_rc() {
 # shellcheck source=/dev/null
 source "$ORCH"
 
-# --- validate_env_readonly ---
+# --- validate_env_no_laxo ---
 
 mkdir -p "$WORK/c1/services"
 rc=0
-DEPLOY_ENV_FILE="$WORK/c1/services/.env" validate_env_readonly || rc=$?
+DEPLOY_ENV_FILE="$WORK/c1/services/.env" validate_env_no_laxo || rc=$?
 assert_rc "validate: .env inexistente -> rc 1" 1 "$rc"
 
-mkdir -p "$WORK/c2/services"
-printf 'DOMAIN_FIELD_ENC_KEY=abc\n' > "$WORK/c2/services/.env"
-chmod 644 "$WORK/c2/services/.env"
-rc=0
-DEPLOY_ENV_FILE="$WORK/c2/services/.env" validate_env_readonly || rc=$?
-assert_rc "validate: .env writable -> rc 1" 1 "$rc"
+# El check medía con `[[ ! -w ]]`, y eso NO expresa lo que quiere. `-w` responde "¿puede
+# escribirlo QUIEN PREGUNTA?", que bajo root es siempre sí —root ignora los bits— y bajo
+# el dueño de un 600 también. Resultado medido en producción: 61 ciclos del auto-deploy,
+# 61 abortos, cero deploys, porque el servicio corre como root.
+#
+# Y el criterio viejo se contradecía con el resto del change: el MUST-4 exige que el .env
+# conserve 600, o sea escribible por su dueño, mientras el validate exigía que nadie
+# pudiera escribirlo. Los dos no pueden ser ciertos a la vez.
+#
+# El criterio nuevo mira los BITS de group y other, que dan la misma respuesta bajo
+# cualquier euid, root incluido. El caso decisivo es el 600: reproduce exactamente la
+# condición que rompía en producción sin necesidad de ser root, porque el dueño del
+# archivo de prueba sí puede escribirlo.
+env_de_prueba() {
+  local dir="$WORK/$1/services" modo="$2"
+  mkdir -p "$dir"
+  printf 'DOMAIN_FIELD_ENC_KEY=abc\n' > "$dir/.env"
+  chmod "$modo" "$dir/.env"
+  echo "$dir/.env"
+}
 
-mkdir -p "$WORK/c3/services"
-printf 'DOMAIN_FIELD_ENC_KEY=abc\n' > "$WORK/c3/services/.env"
-chmod 444 "$WORK/c3/services/.env"
+for caso in "600:0:el modo de produccion, escribible por su dueño" \
+            "640:0:group solo lee" \
+            "644:0:group y other solo leen" \
+            "444:0:nadie escribe" \
+            "660:1:group escribe" \
+            "666:1:cualquiera escribe" \
+            "602:1:other escribe aunque group no" \
+            "607:1:other tiene rwx"; do
+  modo="${caso%%:*}"; resto="${caso#*:}"
+  esperado="${resto%%:*}"; glosa="${resto#*:}"
+  rc=0
+  DEPLOY_ENV_FILE="$(env_de_prueba "c2-$modo" "$modo")" validate_env_no_laxo || rc=$?
+  assert_rc "validate: .env $modo ($glosa) -> rc $esperado" "$esperado" "$rc"
+done
+
+# el otro motivo de aborto sigue vivo y no se lo tapa el cambio de criterio
+ruta_sin_key="$(env_de_prueba c3 600)"
+printf 'OTRA=cosa\n' > "$ruta_sin_key"
+chmod 600 "$ruta_sin_key"
 rc=0
-DEPLOY_ENV_FILE="$WORK/c3/services/.env" validate_env_readonly || rc=$?
-assert_rc "validate: .env readonly + KEY -> rc 0" 0 "$rc"
+DEPLOY_ENV_FILE="$ruta_sin_key" validate_env_no_laxo || rc=$?
+assert_rc "validate: sin DOMAIN_FIELD_ENC_KEY -> rc 1" 1 "$rc"
 
 # --- log_phase ---
 
@@ -89,6 +119,20 @@ LOG_FILE="$WORK/c4/deploy.log" log_phase "test:phase" >/dev/null 2>&1
 content4="$(cat "$WORK/c4/deploy.log" 2>/dev/null || true)"
 assert_contains "log_phase: contiene 'test:phase'" "test:phase" "$content4"
 assert_contains "log_phase: formato ISO datetime" "T" "$content4"
+
+# El log en disco es ACCESORIO y no puede tumbar el deploy. Medido en producción: el
+# auto-deploy corre como root y creó /opt/services/.deploy.log con dueño root:root 644,
+# así que el redeploy MANUAL de sysadmin moría con "tee: Permission denied" y rc=1 en su
+# primera línea de log, sin llegar a ninguna fase. El camino de emergencia caído por no
+# poder escribir un archivo de texto.
+mkdir -p "$WORK/c5"
+printf 'previo\n' > "$WORK/c5/deploy.log"
+chmod 444 "$WORK/c5/deploy.log"
+rc=0
+err5="$(LOG_FILE="$WORK/c5/deploy.log" log_phase "test:degradado" 2>&1 >/dev/null)" || rc=$?
+assert_rc "log_phase: log no escribible -> NO aborta" 0 "$rc"
+assert_contains "log_phase: sin log en disco, el motivo igual sale por stderr" \
+  "test:degradado" "$err5"
 
 # --- should_rollback ---
 

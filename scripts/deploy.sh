@@ -117,7 +117,7 @@ rollback_handler() {
 
 main() {
   log_phase "=== deploy start ==="
-  validate_env_readonly
+  validate_env_no_laxo
   fetch_phase
   detect_phase
   if [[ "${NOOP:-0}" == "1" ]]; then

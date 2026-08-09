@@ -67,6 +67,29 @@ haberlo publicado:
 ssh sysadmin@13.140.183.236 'git -C /opt/services describe --tags'
 ```
 
+#### Cuando el arreglo del deploy no puede llegar por el deploy
+
+`deploy.sh` valida el entorno ANTES de hacer el checkout, asi que un bug en esa
+validacion se blinda a si mismo: el codigo del VPS aborta antes de traer el
+codigo que lo corrige. Paso dos veces con issue-57.2.
+
+Para romperlo hace falta UNA corrida manual que evada la validacion rota. No se
+parchea el script a mano: `DEPLOY_ENV_FILE` ya existe para esto.
+
+```bash
+# el .env real, no services/.env que es un symlink hacia el
+cd /opt/services && PREV_SHA=$(git rev-parse HEAD) \
+  DEPLOY_ENV_FILE=/opt/services/.env ./scripts/redeploy.sh
+```
+
+`PREV_SHA` es obligatorio: sin el, `deploy.sh` aborta en fetch. Y va el SHA
+ACTUAL del VPS, tomado antes del reset, porque es el punto desde el que se
+detectan los cambios.
+
+Si la validacion rota no se puede evadir con una variable, la salida es
+`sudo bash services/install.sh`, que hace fetch y reset por su cuenta sin pasar
+por `deploy.sh`.
+
 ## Documentacion
 
 - `INSTALL.md` -- guia del instalador `domain install` (cliente local).

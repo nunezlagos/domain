@@ -80,7 +80,32 @@ domain_tests_code_hash() {
   {
     printf '%s\n' "$lista"
     printf '%s\n' "$lista" | (cd "$raiz" && git hash-object --stdin-paths 2>/dev/null)
-  } | sha256sum 2>/dev/null | cut -d' ' -f1
+  } | domain_sha256
+}
+
+# domain_sha256 — lee de stdin y escribe el hex del SHA-256, o nada si no hay con qué.
+#
+# DOMAINSERV-266: macOS NO trae sha256sum (ahí la utilidad es `shasum -a 256`), y el
+# `sha256sum 2>/dev/null` que había acá degradaba a hash VACÍO sin decir nada. La cadena
+# completa del daño: el post-test escribe el marker con tree_hash y code_hash vacíos, el
+# pre-edit compara contra vacío, cae a su rama fail-closed (DOMAINSERV-95) y el commit-gate
+# DENIEGA PARA SIEMPRE — con el doctor en verde, porque nada de esto reporta error.
+#
+# Es el mismo fallback que bootstrap.sh:122 ya usaba para verificar el binario descargado;
+# lo que faltaba era usarlo también acá, que es el camino caliente del gate.
+domain_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum 2>/dev/null | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 2>/dev/null | cut -d' ' -f1
+  else
+    # sin ninguna de las dos no se puede hashear; se devuelve vacío como antes, pero el
+    # aviso queda registrado en vez de degradar en silencio
+    type domain_log_hook_error >/dev/null 2>&1 && \
+      domain_log_hook_error "hooks-lib" "${session_id:-}" "sha256_ausente" \
+        "ni sha256sum ni shasum en el PATH: el commit-gate no puede validar el alcance" 2>/dev/null
+    return 1
+  fi
 }
 
 # domain_log_injection <hook> <session_id> <resumen> — REQ-55 issue-55.5.

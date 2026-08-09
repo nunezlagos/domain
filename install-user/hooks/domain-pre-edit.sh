@@ -1237,7 +1237,9 @@ $(cut -c1-8000 "$pol_cache")"
         # DOMAINSERV-95: sin hash almacenado → NO fresco (fail-closed). Un marker
         # legacy (solo-timestamp) o forjado con printf ya no habilita el commit.
         if [ -n "$stored_hash" ]; then
-          current_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+          # DOMAINSERV-266: ver domain_sha256 en domain-hooks-lib.sh. En macOS, sha256sum
+          # directo daba vacío y la comparación de abajo caía a fail-closed permanente.
+          current_hash=$(git diff --no-color HEAD 2>/dev/null | domain_sha256)
           [ "$current_hash" = "$stored_hash" ] && fresh="yes"
         fi
       fi

@@ -269,7 +269,9 @@ if [ "$tests_ok" = "1" ]; then
 
   # DOMAINSERV-74: marker con timestamp + tree hash (git diff HEAD) para
   # invalidar ante cualquier edición posterior.
-  tree_hash=$(git diff --no-color HEAD 2>/dev/null | sha256sum 2>/dev/null | cut -d' ' -f1)
+  # DOMAINSERV-266: domain_sha256 y no sha256sum directo — en macOS la utilidad es
+  # `shasum -a 256`, y un hash vacío acá deja el marker sin alcance y el gate cerrado.
+  tree_hash=$(git diff --no-color HEAD 2>/dev/null | domain_sha256)
   # DOMAINSERV-219: field3 = hash del contenido del código, insensible a los
   # archivos inertes y a que HEAD se mueva. field2 queda por compatibilidad.
   code_hash=""

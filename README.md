@@ -33,6 +33,40 @@ rollback automatico si algo falla.
 
 Para ver que haria sin tocar nada: `./scripts/redeploy.sh --dry-run`.
 
+### 3) Deploy automatico: publicar un tag alcanza
+
+Desde `v0.7.3` (issue-57.2) el VPS se despliega solo. `domain-auto-deploy.timer`
+revisa cada 10 minutos y despliega **solo el ultimo tag `v*` que ademas sea la
+punta de `origin/main`**. Un push a main sin tag no despliega nada: eso es
+deliberado, para que no se publique codigo sin version.
+
+```bash
+git push origin main
+git push origin v1.2.0   # `git push` NO empuja tags: va explicito
+```
+
+Esto revierte de hecho la regla previa de "CI si, CD no" del 2026-07-27, por
+decision explicita del usuario.
+
+Hicieron falta tres arreglos y ninguno se notaba desde afuera, porque el
+mecanismo fallaba **en silencio y siempre**:
+
+- el unit no declaraba `HOME`, y sin `HOME` git no lee el `safe.directory` de
+  `/root/.gitconfig`: exit 128 en cada corrida desde que el timer existe
+- el validate del `.env` medía con `-w`, que bajo root es siempre verdadero
+  porque root ignora los bits de permiso: 61 corridas, 61 abortos, cero deploys
+- `log_phase` escribia con `tee`, asi que un `.deploy.log` no escribible mataba
+  el deploy en su primera linea — y de paso dejaba caido el redeploy manual
+
+Si un ciclo falla, ahora avisa por ntfy en vez de morir callado.
+
+Para saber si un tag llego al VPS, mirar el HEAD del VPS y no el hecho de
+haberlo publicado:
+
+```bash
+ssh sysadmin@13.140.183.236 'git -C /opt/services describe --tags'
+```
+
 ## Documentacion
 
 - `INSTALL.md` -- guia del instalador `domain install` (cliente local).

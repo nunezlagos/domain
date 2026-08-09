@@ -224,9 +224,126 @@ POSTGRES_PASSWORD=$secreto")
   assert_no_contains "$T — la salida al journal no vuelca el .env" "$secreto" "$salida"
 }
 
+# --- extensión de issue-57.2: los 3 hallazgos del 4R sobre el camino de la alerta --------
+#
+# El aviso llegaba y no servía. Medido contra el canal real con &since=all: ~30 avisos en
+# 7 horas, todos correctos y ninguno accionable.
+
+# Caja con lo que el script necesita para armar el motivo: un .deploy.log con la causa y un
+# journalctl de mentira. Las últimas líneas del journal son las de systemd A PROPÓSITO —
+# es exactamente lo que desplazaba a las del script en producción.
+preparar_caja_con_motivo() {
+  local env_contenido="$1" causa="$2" caja
+  caja="$(preparar_caja "$env_contenido")"
+
+  printf '[2026-08-09T14:00:00Z] === deploy start ===\n[2026-08-09T14:00:01Z] %s\n' \
+    "$causa" > "$caja/.deploy.log"
+
+  cat > "$caja/bin/journalctl" <<'STUB'
+#!/usr/bin/env bash
+cat <<'SALIDA'
+auto-deploy: arrancando ciclo
+domain-auto-deploy.service: Main process exited, code=exited, status=1/FAILURE
+domain-auto-deploy.service: Failed with result 'exit-code'.
+SALIDA
+STUB
+  chmod +x "$caja/bin/journalctl"
+  printf '%s' "$caja"
+}
+
+correr_alerta_sin_motivo() {
+  local caja="$1"
+  : > "$caja/curl-args.txt"
+  PATH="$caja/bin:$PATH" CURL_ARGS="$caja/curl-args.txt" \
+    DEPLOY_LOG="$caja/.deploy.log" ALERTA_ESTADO="$caja/estado" \
+    bash "$caja/services/scripts/auto-deploy-alert.sh" < /dev/null 2>&1
+}
+
+# Hallazgo 1 (R3-1): `journalctl -n 5 | tail -n 3` se queda con las tres últimas líneas, y
+# en una unit que acaba de fallar las últimas son SIEMPRE las de systemd. La causa real
+# queda sepultada. Medido: el canal decía "Failed with result exit-code" mientras el
+# .deploy.log decía "validate: .env writable — abort", 61 veces.
+test_alerta_el_cuerpo_nombra_la_causa() {
+  local T="TestAlerta_ElCuerpoNombraLaCausa"
+  alerta_disponible "$T" || return
+  local caja causa="validate: .env writable — abort"
+  caja="$(preparar_caja_con_motivo "NTFY_TOPIC=tpc-causa" "$causa")"
+
+  correr_alerta_sin_motivo "$caja" >/dev/null
+  local args; args=$(cat "$caja/curl-args.txt")
+
+  assert_contains "$T — el cuerpo nombra la causa real, no solo que falló" "$causa" "$args"
+  # el guard del hallazgo: si vuelve a quedarse con las líneas de systemd, esto lo agarra
+  assert_no_contains "$T — la línea de systemd no desplaza a la causa" \
+    "Failed with result" "$args"
+}
+
+# Hallazgo 2 (R4-1): OnFailure dispara una vez por ciclo, o sea cada 10 minutos mientras el
+# fallo persista. El canal es compartido con healthcheck y backup: un fallo permanente lo
+# convierte en ruido y la próxima alerta real se pierde entre repetidos.
+test_alerta_fallo_repetido_no_notifica_dos_veces() {
+  local T="TestAlerta_FalloRepetido_NoNotificaDosVeces"
+  alerta_disponible "$T" || return
+  local caja
+  caja="$(preparar_caja_con_motivo "NTFY_TOPIC=tpc-throttle" "validate: .env laxo — abort")"
+
+  correr_alerta_sin_motivo "$caja" >/dev/null
+  local primera; primera=$(cat "$caja/curl-args.txt")
+  correr_alerta_sin_motivo "$caja" >/dev/null
+  local segunda; segunda=$(cat "$caja/curl-args.txt")
+
+  if [[ -n "$primera" ]]; then
+    pass "$T — el primer fallo SÍ notifica"
+  else
+    fail "$T — el primer fallo no notificó: el throttle se comió el aviso inicial"
+    return
+  fi
+  assert_eq "$T — el mismo fallo repetido no vuelve a notificar" "" "$segunda"
+
+  # el límite del throttle, y es la mitad que importa: una causa NUEVA es información nueva
+  printf '[2026-08-09T14:10:00Z] verify: healthcheck timeout — abort\n' >> "$caja/.deploy.log"
+  correr_alerta_sin_motivo "$caja" >/dev/null
+  local tercera; tercera=$(cat "$caja/curl-args.txt")
+  if [[ -n "$tercera" ]]; then
+    pass "$T — un motivo DISTINTO sí notifica aunque el anterior también fallara"
+  else
+    fail "$T — el throttle silenció un cambio de causa: eso es perder información"
+  fi
+}
+
+# Hallazgo 3 (R1-1): el ADR-4 se comprometió a mandar las líneas RECORTADAS y el único
+# recorte era `tail -n 3`. ntfy.sh es público y el topic es su única credencial.
+test_alerta_trunca_y_no_vuelca_lineas_largas() {
+  local T="TestAlerta_TruncaYNoVuelcaLineasLargas"
+  alerta_disponible "$T" || return
+  local caja larga
+  larga="$(printf 'x%.0s' {1..2000})"
+  caja="$(preparar_caja_con_motivo "NTFY_TOPIC=tpc-trunc" "fallo con payload: $larga")"
+
+  correr_alerta_sin_motivo "$caja" >/dev/null
+  local args; args=$(cat "$caja/curl-args.txt")
+
+  local mas_larga=0 linea
+  while IFS= read -r linea; do
+    [[ "$linea" == http://* || "$linea" == https://* ]] && continue
+    (( ${#linea} > mas_larga )) && mas_larga=${#linea}
+  done <<< "$args"
+
+  if (( mas_larga > 0 && mas_larga <= 512 )); then
+    pass "$T — ninguna línea del aviso supera 512 chars (la más larga: $mas_larga)"
+  else
+    fail "$T — hay una línea de $mas_larga chars en el cuerpo: el recorte del ADR-4 no existe"
+  fi
+  assert_contains "$T — igual conserva el principio del motivo, no lo tira entero" \
+    "fallo con payload" "$args"
+}
+
 test_unit_declara_onfailure
 test_alerta_sin_topic_no_rompe
 test_alerta_no_filtra_el_topic
+test_alerta_el_cuerpo_nombra_la_causa
+test_alerta_fallo_repetido_no_notifica_dos_veces
+test_alerta_trunca_y_no_vuelca_lineas_largas
 
 if (( failed > 0 )); then
   echo "RED — $failed tests fallaron"

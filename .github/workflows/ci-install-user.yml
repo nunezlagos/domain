@@ -6,16 +6,26 @@ name: CI install-user
 # tests. O sea que el binario que se publica como Release se compilaba sin que nada
 # ejecutara la suite. Este workflow cierra ese hueco.
 
+# DOMAINSERV-272: el filtro decía install-user/** porque se asumía que el módulo era
+# autocontenido, y NO lo es: version_test.go:70, :92 y :123 asertan sobre release-installer.yml,
+# ci-mcp.yml, ci-shell-guards.yml y benchmarks-mcp.yml, leyéndolos con
+# filepath.Join("..", ".github", "workflows", …). MEDIDO en la historia real: de los 18 commits
+# que tocaron esos cuatro archivos, 15 NO dispararon este job — el guard de inyección de versión
+# y el de ramas quedaban sin correr hasta el próximo cambio del instalador. Entre ellos ecd5acf9,
+# que modificó ci-shell-guards.yml, que es exactamente lo que version_test.go:123 lee.
 on:
   push:
     branches: [main, develop]
     paths:
       - 'install-user/**'
-      - '.github/workflows/ci-install-user.yml'
+      - '.github/workflows/**'
+      # el job size-lint compila el linter desde acá (ver el step "size-lint" más abajo)
+      - 'services/domain-mcp/cmd/size-lint/**'
   pull_request:
     paths:
       - 'install-user/**'
-      - '.github/workflows/ci-install-user.yml'
+      - '.github/workflows/**'
+      - 'services/domain-mcp/cmd/size-lint/**'
 
 defaults:
   run:

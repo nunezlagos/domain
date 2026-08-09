@@ -25,9 +25,9 @@ var reVarDeUsuario = regexp.MustCompile(`\$\{(DOMAIN_[A-Z0-9_]+):-`)
 
 // documentadas en el ejemplo aunque no matcheen el patrón de arriba, cada una con su razón
 var varsFueraDelPatron = map[string]string{
-	"DOMAIN_USER_EMAIL":   "la persiste el instalador desde Go (envstore.go), no la lee ningún shell",
-	"DOMAIN_MCP_API_KEY":  "alias de DOMAIN_API_KEY que acepta el parser de domain-hooks-lib.sh",
-	"DOMAIN_API_KEY":      "se resuelve por env o por archivo; el patrón de default no aplica",
+	"DOMAIN_USER_EMAIL":  "la persiste el instalador desde Go (envstore.go), no la lee ningún shell",
+	"DOMAIN_MCP_API_KEY": "alias de DOMAIN_API_KEY que acepta el parser de domain-hooks-lib.sh",
+	"DOMAIN_API_KEY":     "se resuelve por env o por archivo; el patrón de default no aplica",
 }
 
 func archivosQueLeenConfig(t *testing.T) []string {

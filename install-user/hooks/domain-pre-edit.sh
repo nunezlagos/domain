@@ -1177,6 +1177,35 @@ if re.search(INTERPRETES, cmd):
             sys.exit(0)
 ' 2>/dev/null)
   if [ "$is_commit" = "yes" ]; then
+    # DOMAINSERV-257: las policies existían en la BD y NADA las hacía llegar al camino
+    # donde se violan. El único disparador vivo estaba en sdd-review —o sea, dentro de un
+    # flow que LLEGA a esa fase— y aun ahí entregaba la primera línea truncada a 160
+    # chars, no la regla. Medido: 8 commits directos a main después de abrir el ticket,
+    # con la policy ramas-y-tags v3 activa y sus 4636 chars de cuerpo sin entregar nunca.
+    #
+    # Va por permissionDecisionReason y NO por additionalContext: el reason es campo
+    # confirmado de PreToolUse, y este gate no puede depender de una capacidad que, si no
+    # existe, falla sin que nadie se entere. Se paga una interrupción por sesión, en el
+    # primer commit; los siguientes pasan por el marker de abajo.
+    #
+    # El body lo cachea SessionStart, que no declara timeout. Acá no se hace red: un
+    # PreToolUse tiene 10 s y agotarlos BLOQUEA la tool que el usuario quiso correr.
+    pol_marker="$HOME/.local/state/domain/policy-entregada-git_workflow-$session_id"
+    pol_slug=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "${payload_cwd:-$PWD}")")
+    pol_cache="$HOME/.local/state/domain/policy-bodies/$pol_slug/git_workflow.md"
+    if [ ! -f "$pol_marker" ] && [ -s "$pol_cache" ]; then
+      mkdir -p "$HOME/.local/state/domain" 2>/dev/null
+      date +%s > "$pol_marker"
+      emit_decision "ask" "POLICIES VIGENTES DE ESTE PROYECTO PARA git (kind=git_workflow).
+Se entregan porque este comando es un commit, no porque se sospeche una violación.
+Si lo que vas a commitear las contradice, decilo ANTES de ejecutarlo.
+
+$(cut -c1-8000 "$pol_cache")"
+    fi
+    # Fail-OPEN deliberado si no hay cache (VPS caído en el SessionStart): el commit sigue
+    # su curso normal. Negar por falta de base dejaría el gate insatisfacible y empuja al
+    # bypass permanente, que es el modo de falla de DOMAINSERV-111/175/195.
+
     # DOMAINSERV-108: flows MICRO (ediciones triviales sin lógica testeable:
     # texto de front, script nuevo, doc/config) están EXENTOS del requisito de
     # tests (decisión explícita del usuario). El post-orchestrate escribe el

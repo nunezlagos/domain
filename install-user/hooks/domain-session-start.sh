@@ -270,6 +270,54 @@ if [ -z "$policy_out" ]; then
   echo "⚠ domain-session-start: domain_project_policy_list no disponible (MCP sin respuesta)" >&2
 fi
 
+# ---------- 5b-bis. CACHE DE BODIES PARA EL DISPARADOR (DOMAINSERV-257) ----------
+# policy_list devuelve el ÍNDICE: policySlim omite body_md y solo expone body_md_len, así
+# que el saludo lista slugs y nadie entrega la REGLA. El body se baja acá, donde la red es
+# gratis (este hook no declara timeout), y el pre-edit solo LEE el archivo: un PreToolUse
+# tiene 10 s y agotarlos BLOQUEA la tool que el usuario quiso correr.
+#
+# El directorio se nombra con el basename del toplevel git, la MISMA derivación que hace el
+# pre-edit. Si acá se usara $mem_slug y allá otra cosa, el pre-edit leería un directorio que
+# nadie escribió y la entrega no ocurriría nunca, sin error.
+pol_repo_slug=$(basename "$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || echo "$cwd")")
+pol_dir="$HOME/.local/state/domain/policy-bodies/$pol_repo_slug"
+mkdir -p "$pol_dir" 2>/dev/null
+pol_tmp="$pol_dir/git_workflow.md.tmp"
+: > "$pol_tmp" 2>/dev/null
+for pol_slug_it in $(printf '%s' "$policy_out" | python3 -c "
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+for c in d.get('result', {}).get('content', []):
+    try: b = json.loads(c.get('text', ''))
+    except Exception: continue
+    for p in b.get('policies') or []:
+        if p.get('kind') == 'git_workflow' and p.get('slug'):
+            print(p['slug'])
+" 2>/dev/null); do
+  pol_body=$(call_mcp_tool "domain_policy_get" "$(printf '{"slug":"%s","project_slug":"%s"}' "$pol_slug_it" "$mem_slug")" 2>/dev/null | python3 -c "
+import json, sys
+try: d = json.load(sys.stdin)
+except Exception: sys.exit(0)
+for c in d.get('result', {}).get('content', []):
+    try: b = json.loads(c.get('text', ''))
+    except Exception: continue
+    if b.get('body_md'):
+        # la versión viaja con el cuerpo: citar una regla con el número equivocado es peor
+        # que no citarla, y este archivo puede quedar stale a mitad de sesión
+        print('== policy %s (v%s) ==' % (b.get('slug'), b.get('version')))
+        print(b['body_md'])
+" 2>/dev/null)
+  [ -n "$pol_body" ] && printf '%s\n\n' "$pol_body" >> "$pol_tmp"
+done
+# .tmp + mv y no escritura directa: con el VPS caído el cache quedaría VACÍO y el pre-edit
+# no podría distinguir "este proyecto no tiene policies de git" de "no se pudieron bajar".
+if [ -s "$pol_tmp" ]; then
+  mv "$pol_tmp" "$pol_dir/git_workflow.md" 2>/dev/null
+else
+  rm -f "$pol_tmp" 2>/dev/null
+fi
+
 # ---------- 5c. DETECCIÓN DE HOST (DOMAINSERV-92) ----------
 # Orca inyecta env vars en toda terminal/sesión de agente. Si estamos bajo Orca
 # → host=orca (las skills/policies orca-* aplican). Si no → host=cli (Claude Code

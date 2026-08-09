@@ -212,7 +212,9 @@ if [ "$need_clone" -eq 1 ]; then
   fi
   step "Clonando repo a $REPO_DIR (cache del user)"
   sudo -u "$REAL_USER" git clone --depth 1 https://github.com/nunezlagos/domain.git "$REPO_DIR"
-  echo "created by install-user/install-curl.sh on $(date -Iseconds)" > "$REPO_DIR/.domain-user-install-marker"
+  # en CACHE_DIR y no en REPO_DIR: el marker dice que este CACHE es nuestro, así que
+  # tiene que sobrevivir al rm -rf del repo de más arriba (DOMAINSERV-260)
+  echo "created by install-user/install-curl.sh on $(date -Iseconds)" > "$CACHE_DIR/.domain-user-install-marker"
   chown -R "$REAL_USER" "$CACHE_DIR"
   ok "repo clonado"
 else

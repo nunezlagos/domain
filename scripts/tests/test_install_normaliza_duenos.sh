@@ -320,7 +320,17 @@ TestInstall_InstallDirVacio_AbortaSinChown() {
   correr_normalizacion "" "$DUENO_DESTINO"
   assert_ne "INSTALL_DIR='' -> no sale 0" "0" "$RC"
   assert_eq "INSTALL_DIR='' -> chown NO se invocó" "" "$(chown_invocaciones)"
-  assert_ne "INSTALL_DIR='' -> explica el aborto" "" "$SALIDA"
+  # el mensaje tiene que nombrar el VACÍO, no solo abortar. Hay tres guardas encadenadas
+  # (-z, no-absoluta, no-es-dir) y la cadena entera atrapa el vacío: con un assert que
+  # acepta cualquier mensaje, borrar la primera guarda deja el test EN VERDE porque la
+  # segunda dispara. Medido en la tabla de sabotajes de t9, y es el patrón registrado de
+  # este proyecto: la defensa en profundidad enmascarando el test del fix primario.
+  local minuscula="${SALIDA,,}"
+  if [[ "$minuscula" == *vac* ]]; then
+    pass "INSTALL_DIR='' -> el mensaje nombra el vacío, no otro motivo"
+  else
+    fail "INSTALL_DIR='' -> abortó por otra guarda, no por la del vacío: '$SALIDA'"
+  fi
 
   # "/" viaja con el vacío por la misma razón: los dos son el modo de falla irreversible
   # de un recursivo, y el vacío suele degradar justo en "/" al concatenar una subruta
@@ -339,11 +349,14 @@ TestInstall_InstallDirRelativo_AbortaSinChown() {
   correr_normalizacion "../x" "$DUENO_DESTINO"
   assert_ne "INSTALL_DIR='../x' -> no sale 0" "0" "$RC"
   assert_eq "INSTALL_DIR='../x' -> chown NO se invocó" "" "$(chown_invocaciones)"
+  # el || con *"../x"* que había acá hacía que el assert no discriminara: "../x" no existe,
+  # así que la guarda de "no es directorio" aborta igual y su mensaje también nombra la
+  # ruta. Con eso, borrar la guarda de ruta absoluta dejaba el test en verde
   local minuscula="${SALIDA,,}"
-  if [[ "$minuscula" == *absolut* || "$minuscula" == *"../x"* ]]; then
+  if [[ "$minuscula" == *absolut* ]]; then
     pass "el mensaje dice que la ruta tiene que ser absoluta"
   else
-    fail "el mensaje no nombra el problema ni la ruta: '$SALIDA'"
+    fail "abortó por otra guarda, no por la de ruta absoluta: '$SALIDA'"
   fi
 }
 

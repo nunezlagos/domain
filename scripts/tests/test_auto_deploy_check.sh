@@ -280,6 +280,145 @@ else
   fail "(k) install.sh ya no clona el repo completo en INSTALL_DIR: el ExecStart del timer podría no existir"
 fi
 
+# --- (l)(m) DOMAINSERV-268: SVC=all no se despliega solo ---------------------------------
+# publicar_con_tag hace commit --allow-empty, así que ningún caso de arriba ejercita
+# detect_changed_services. Estos dos tocan un path concreto, que es lo que decide el SVC.
+publicar_con_tag_tocando() {
+  local repo="$1" tag="$2" path="$3"
+  local clon="$WORK/publicador-$$-$RANDOM"
+  git clone -q "$repo/../$(basename "$repo").git" "$clon"
+  git -C "$clon" config user.email p@test
+  git -C "$clon" config user.name p
+  git -C "$clon" config tag.gpgsign false
+  mkdir -p "$clon/$(dirname "$path")"
+  printf 'cambio para %s\n' "$tag" >> "$clon/$path"
+  git -C "$clon" add -A
+  git -C "$clon" commit -q -m "release $tag"
+  git -C "$clon" tag -a "$tag" -m "$tag"
+  git -C "$clon" push -q origin main
+  git -C "$clon" push -q origin "$tag"
+  rm -rf "$clon"
+}
+
+# (l) un tag que toca services/Makefile pide SVC=all -> el ciclo se abstiene y avisa
+montar_repo repo-l
+publicar_con_tag_tocando "$WORK/repo-l" v0.1.0 services/Makefile
+out_l="$(correr_check "$WORK/repo-l")"; rc_l=$?
+if [[ "$rc_l" != "0" ]]; then
+  pass "(l) SVC=all -> el decisor sale != 0 (es lo que dispara OnFailure -> ntfy)"
+else
+  fail "(l) SVC=all salió con rc=0: la unit queda VERDE sin haber desplegado"
+fi
+if [[ -z "$(invocaciones "$WORK/repo-l")" ]]; then
+  pass "(l) SVC=all -> deploy.sh NO se invoca"
+else
+  fail "(l) SVC=all invocó deploy.sh igual: $(invocaciones "$WORK/repo-l")"
+fi
+if grep -q "a mano" <<< "$out_l"; then
+  pass "(l) el motivo dice qué hacer, no solo que falló"
+else
+  fail "(l) el motivo no dice cómo destrabarlo: $out_l"
+fi
+# el motivo tiene que viajar por .deploy.log, que es de donde auto-deploy-alert.sh lo saca
+if grep -q "SVC=all" "$WORK/repo-l/.deploy.log" 2>/dev/null; then
+  pass "(l) el motivo queda en .deploy.log, que es lo que publica la alerta"
+else
+  fail "(l) el motivo no llegó a .deploy.log: ntfy publicaría el deploy anterior"
+fi
+
+# (m) contra-prueba: un tag que toca UN servicio sigue desplegándose solo
+montar_repo repo-m
+publicar_con_tag_tocando "$WORK/repo-m" v0.1.0 services/domain-mcp/main.go
+correr_check "$WORK/repo-m" >/dev/null
+if [[ -n "$(invocaciones "$WORK/repo-m")" ]]; then
+  pass "(m) un tag de un solo servicio sigue desplegando: el gate no apagó el CD"
+else
+  fail "(m) el gate bloqueó un deploy legítimo de un solo servicio"
+fi
+
+# --- (n)(o)(p) DOMAINSERV-262: el ciclo renormaliza la propiedad -------------------------
+# El unit no declara User=, así que corre como root y cada ref que trae el fetch nace de
+# root: lo que install.sh dejó prolijo se degrada solo entre corridas del instalador. Cambiar
+# dueños de verdad exige root, así que se stubea chown y se mide QUÉ rutas se le pasaron.
+STUB_DIR="$WORK/bin"; mkdir -p "$STUB_DIR"
+cat > "$STUB_DIR/chown" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${CHOWN_LOG:-/dev/null}"
+exit 0
+STUB
+chmod +x "$STUB_DIR/chown"
+
+# montar_repo no copia la lib: estos casos necesitan la REAL, no un doble, porque el punto
+# es que el ciclo la invoque de verdad
+montar_repo_con_lib() {
+  local nombre="$1"
+  montar_repo "$nombre"
+  mkdir -p "$WORK/$nombre/services/scripts"
+  cp "$REPO_ROOT_REAL/services/scripts/normalizar-duenos.sh" "$WORK/$nombre/services/scripts/"
+}
+REPO_ROOT_REAL="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+correr_check_con_chown() {
+  local repo="$1"; shift
+  CHOWN_LOG="$repo.chown.log" PATH="$STUB_DIR:$PATH" DEPLOY_REPO_ROOT="$repo" bash "$CHECK" "$@" 2>&1
+}
+
+# (n) un ciclo NOOP (sin tag nuevo) igual renormaliza .git: es donde el fetch escribe, y es
+#     la regresión medida — las refs de origin/main quedaban de root
+montar_repo_con_lib repo-n
+correr_check_con_chown "$WORK/repo-n" >/dev/null || true
+if [[ -s "$WORK/repo-n.chown.log" ]]; then
+  pass "(n) el ciclo renormaliza aunque no despliegue (el fetch escribe en .git)"
+else
+  fail "(n) el ciclo no renormalizó nada: la propiedad se sigue degradando sola"
+fi
+if grep -q "\.git" "$WORK/repo-n.chown.log" 2>/dev/null; then
+  pass "(n) el alcance del ciclo NOOP incluye .git"
+else
+  fail "(n) no tocó .git, que es justo donde el fetch escribe"
+fi
+# y NO el árbol entero: la lib hace un fork de chown POR RUTA (7462 rutas contra 409 de
+# .git en el repo real), y el timer corre cada 10 min
+if grep -q "services/domain-mcp/Dockerfile" "$WORK/repo-n.chown.log" 2>/dev/null; then
+  fail "(n) un ciclo NOOP recorrió el árbol entero: 18x el costo, cada 10 minutos"
+else
+  pass "(n) un ciclo NOOP NO recorre el árbol entero (solo .git)"
+fi
+
+# (o) tras un deploy REAL el alcance sube al árbol completo: pull_ff reescribe el worktree
+montar_repo_con_lib repo-o
+publicar_con_tag "$WORK/repo-o" v0.1.0
+correr_check_con_chown "$WORK/repo-o" >/dev/null || true
+if grep -q "services/domain-mcp/Dockerfile" "$WORK/repo-o.chown.log" 2>/dev/null; then
+  pass "(o) tras desplegar renormaliza el árbol completo (pull_ff lo reescribe como root)"
+else
+  fail "(o) tras un deploy real no renormalizó el worktree"
+fi
+
+# (p) el trap NO puede comerse el rc del ciclo: un deploy fallido tiene que seguir saliendo
+#     con su código, que es lo que dispara OnFailure -> ntfy
+montar_repo_con_lib repo-p
+publicar_con_tag "$WORK/repo-p" v0.1.0
+DEPLOY_SHIM_RC=17 correr_check_con_chown "$WORK/repo-p" >/dev/null; rc_p=$?
+if [[ "$rc_p" == "17" ]]; then
+  pass "(p) el trap preserva el rc del deploy fallido"
+else
+  fail "(p) el trap se comió el rc: esperaba 17, obtuve $rc_p (la alerta no se dispararía)"
+fi
+
+# (q) un ciclo que se retira por el lock NO renormaliza: estaría haciendo chown sobre un
+#     deploy ajeno a mitad de camino
+montar_repo_con_lib repo-q
+exec 8>"$WORK/repo-q/.git/auto-deploy.lock"
+flock -n 8
+correr_check_con_chown "$WORK/repo-q" >/dev/null || true
+flock -u 8; exec 8>&-
+if [[ -s "$WORK/repo-q.chown.log" ]]; then
+  fail "(q) renormalizó bajo un ciclo ajeno en curso"
+else
+  pass "(q) el que se retira por el lock no toca la propiedad de nadie"
+fi
+
 if (( failed > 0 )); then
   echo "RED — $failed tests fallaron"
   exit 1

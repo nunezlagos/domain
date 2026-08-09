@@ -55,6 +55,10 @@ LIBS_CANDIDATAS=(
 
 DUENO_DESTINO="sysadmin"
 DUENO_PREVIO="root"
+# uid de postgres DENTRO de su container. Un chown del host no puede reconstruirlo, así
+# que certs/postgres/server.key queda legítimamente con otro dueño y el criterio del
+# MUST-3 lo exceptúa
+UID_CONTAINER="999"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -439,6 +443,44 @@ TestInstall_Normaliza_NoSigueSymlinks() {
   assert_eq ".env sigue en 600 tras normalizar" "600" "$(stat -c '%a' "$repo/.env")"
 }
 
+# El criterio del MUST-3, corregido el 2026-08-09: no "un solo dueño" —que es
+# inalcanzable— sino "ningún resto de root". La diferencia importa porque el árbol tiene
+# legítimamente un archivo de otro dueño: certs/postgres/server.key pertenece al uid 999
+# de DENTRO del container de postgres, un chown del host no puede reconstruirlo, y
+# tocarlo tumba producción. El criterio viejo contaba ese archivo como una falla.
+TestInstall_Normaliza_NoDejaRestosDeRoot() {
+  cargar_lib || { fail "la lib no está: fase roja"; return; }
+  preparar restos-de-root
+  local repo="$REPO_PRUEBA"
+  crear_arbol_con_symlinks "$repo"
+  sembrar_duenos "$repo" "$DUENO_PREVIO"
+
+  # estado del VPS medido: certs/ ya es de sysadmin y solo server.key conserva el uid
+  # interno del container. Sembrarlo todo de root haría fallar el criterio por una
+  # condición que en producción no existe.
+  local ruta
+  while IFS= read -r ruta; do
+    printf '%s\t%s\n' "$ruta" "$DUENO_DESTINO" >> "$REGISTRO"
+  done < <(find "$repo/certs")
+  printf '%s\t%s\n' "$repo/certs/postgres/server.key" "$UID_CONTAINER" >> "$REGISTRO"
+
+  correr_normalizacion "$repo" "$DUENO_DESTINO"
+  assert_eq "exit 0" "0" "$RC"
+
+  local restos="" dueno
+  while IFS= read -r ruta; do
+    dueno="$(dueno_de "$ruta")"
+    [[ "$dueno" == "$DUENO_DESTINO" || "$dueno" == "$UID_CONTAINER" ]] && continue
+    restos+="$ruta($dueno) "
+  done < <(find "$repo")
+  assert_eq "no queda ningún resto de $DUENO_PREVIO en el árbol" "" "$restos"
+
+  # el complemento del criterio: el uid del container sobrevive. Sin este assert, un
+  # chown que arrasara con certs/ pasaría el test de arriba y tumbaría postgres
+  assert_eq "el uid interno del container sigue siendo el dueño de server.key" \
+    "$UID_CONTAINER" "$(dueno_de "$repo/certs/postgres/server.key")"
+}
+
 # === runner ===
 
 TESTS=(
@@ -448,6 +490,7 @@ TESTS=(
   TestInstall_InstallDirRelativo_AbortaSinChown
   TestInstall_Normaliza_NoCambiaModos
   TestInstall_Normaliza_NoSigueSymlinks
+  TestInstall_Normaliza_NoDejaRestosDeRoot
 )
 
 for test_actual in "${TESTS[@]}"; do

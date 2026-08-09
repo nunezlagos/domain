@@ -46,7 +46,19 @@
 #### Scenario: un repo con dueños mezclados queda normalizado
 - **Given** `/opt/services` con archivos de dos dueños distintos (el estado medido: 3363 de root)
 - **When** se corre el one-liner del instalador
-- **Then** al terminar, `/opt/services` tiene un dueño ÚNICO y consistente, verificable con `find /opt/services ! -user <dueño> | wc -l` devolviendo 0
+- **Then** al terminar no queda ningún resto de root, verificable con
+  `find /opt/services ! -user <dueño> ! -uid 999 | wc -l` devolviendo 0
+
+> **Nota de verificación (corregida el 2026-08-09, tras medir en el VPS).** El Then
+> original exigía `find /opt/services ! -user <dueño> | wc -l` devolviendo 0, y ese
+> conteo es INALCANZABLE por cualquier implementación correcta. Medido: devuelve 9.
+> Ocho de esos nueve son symlinks —los `.env` por servicio y `services/certs`— y el
+> noveno es `certs/postgres/server.key`, cuyo dueño es el uid **999 de dentro del
+> container**, que un `chown` del host no puede reconstruir y que está excluido a
+> propósito porque tocarlo tumba postgres. El criterio corregido expresa la intención
+> real —que no queden restos de root— en vez de un número que dependía de un detalle
+> del layout. Los symlinks los cubre `chown -h`, que opera sobre el enlace y no sobre
+> su referente.
 
 #### Scenario: correrlo dos veces seguidas no cambia nada la segunda vez
 - **Given** un `/opt/services` ya normalizado por una corrida previa

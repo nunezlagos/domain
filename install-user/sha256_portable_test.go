@@ -42,11 +42,32 @@ func pathSinSha256sum(t *testing.T, conShasum bool) string {
 	}
 
 	if conShasum {
-		// shasum -a 256 con la misma salida que sha256sum: "<hex>  -"
-		w := filepath.Join(bin, "shasum")
-		cuerpo := "#!/bin/sh\n# emula `shasum -a 256` delegando en el sha256sum real\nexec " + real + "\n"
-		if err := os.WriteFile(w, []byte(cuerpo), 0o755); err != nil {
-			t.Fatal(err)
+		// El shasum REAL primero: ubuntu-latest lo trae con perl, y una utilidad de verdad no
+		// puede mentir sobre los flags que recibe.
+		//
+		// La versión anterior de este helper emulaba shasum con `exec <sha256sum>` SIN "$@",
+		// o sea IGNORANDO los argumentos. MEDIDO: con eso, cambiar la rama de fallback de la
+		// lib a `shasum` a secas —que es SHA-1, el default de la utilidad— dejaba los tres
+		// tests en VERDE, mientras en una macOS real el marker nunca habría validado. Un
+		// emulador que ignora los flags no prueba el fallback: prueba el emulador.
+		if realShasum, err := exec.LookPath("shasum"); err == nil {
+			_ = os.Symlink(realShasum, filepath.Join(bin, "shasum"))
+			// perl es lo que shasum necesita para correr
+			if p, err := exec.LookPath("perl"); err == nil {
+				_ = os.Symlink(p, filepath.Join(bin, "perl"))
+			}
+		} else {
+			// sin shasum real, el emulador EXIGE -a 256 y falla si no lo recibe
+			w := filepath.Join(bin, "shasum")
+			cuerpo := "#!/bin/sh\n" +
+				"# emula `shasum -a 256`. EXIGE los flags: si el llamador no pide -a 256 sale 2,\n" +
+				"# porque un emulador permisivo dejaría pasar un fallback que calcula SHA-1.\n" +
+				"[ \"$1\" = \"-a\" ] && [ \"$2\" = \"256\" ] || { echo \"emulador: esperaba -a 256, recibi: $*\" >&2; exit 2; }\n" +
+				"shift 2\n" +
+				"exec " + real + " \"$@\"\n"
+			if err := os.WriteFile(w, []byte(cuerpo), 0o755); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	return bin
@@ -127,19 +148,30 @@ func TestSha256Portable_NingunHookInvocaSha256sumDirecto(t *testing.T) {
 		t.Fatalf("no se encontró ningún hook: el guard quedaría verde por vacío (err=%v)", err)
 	}
 
+	// Se exceptúa el CUERPO de domain_sha256, no el archivo que la contiene. Saltear
+	// domain-hooks-lib.sh entero dejaba sin cubrir justo el archivo donde vivía el bug
+	// original (su línea 83): MEDIDO — reponiéndolo ahí, los tres tests seguían en verde.
 	var ofensores []string
 	for _, h := range hooks {
 		b, err := os.ReadFile(h)
 		if err != nil {
 			t.Fatal(err)
 		}
+		dentroDeLaFuncion := false
 		for i, linea := range strings.Split(string(b), "\n") {
-			// la definición de domain_sha256 SÍ lo nombra: es la única que puede
-			if strings.Contains(h, "domain-hooks-lib.sh") {
+			txt := strings.TrimSpace(linea)
+			if strings.HasPrefix(txt, "domain_sha256()") {
+				dentroDeLaFuncion = true
 				continue
 			}
-			if strings.Contains(linea, "sha256sum") && !strings.HasPrefix(strings.TrimSpace(linea), "#") {
-				ofensores = append(ofensores, h+":"+strconv.Itoa(i+1)+" → "+strings.TrimSpace(linea))
+			if dentroDeLaFuncion {
+				if txt == "}" {
+					dentroDeLaFuncion = false
+				}
+				continue
+			}
+			if strings.Contains(linea, "sha256sum") && !strings.HasPrefix(txt, "#") {
+				ofensores = append(ofensores, h+":"+strconv.Itoa(i+1)+" → "+txt)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -84,7 +85,22 @@ func TestPluginSddGate_SeImportaSinErrores(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mod := "file://" + ruta + "/templates/opencode-sdd-gate.js"
+	// Se importa una COPIA con extensión .mjs y no el .js directo. Sin package.json que
+	// declare "type": "module", Node decide si un .js es ESM o CJS por heurística, y esa
+	// heurística NO existe en todas las versiones: medido, v20.18.1 falla con "Cannot use
+	// import statement outside a module" y v20.20.2 pasa, con el mismo archivo. Atar el
+	// guard a la minor de Node del runner lo vuelve un rojo intermitente que no dice nada
+	// sobre el plugin. La extensión .mjs es ESM por definición, en cualquier versión.
+	// Lo que el test verifica —que los imports del plugin resuelvan— no cambia.
+	origen, err := os.ReadFile(filepath.Join(ruta, "templates", "opencode-sdd-gate.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	copia := filepath.Join(t.TempDir(), "opencode-sdd-gate.mjs")
+	if err := os.WriteFile(copia, origen, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mod := "file://" + copia
 
 	out, err := exec.Command("node", "--input-type=module", "-e",
 		"await import(process.argv[1]); process.stdout.write('ok')", mod).CombinedOutput()
@@ -113,28 +129,71 @@ func TestCodeHash_NoDependeDelLocale(t *testing.T) {
 	raiz := strings.TrimSpace(string(repo))
 	lib := raiz + "/install-user/hooks/domain-hooks-lib.sh"
 
+	// stdout y stderr SEPARADOS, no CombinedOutput. Si el locale pedido no está instalado,
+	// bash escribe "warning: setlocale: LC_ALL: cannot change locale (…)" a stderr, y
+	// CombinedOutput lo pegaba delante del hash: los dos valores dejaban de coincidir y el
+	// test fallaba por una razón que no tiene nada que ver con lo que verifica. MEDIDO: es
+	// exactamente por esto que ci-install-user estuvo en rojo desde el 2026-08-06 mientras
+	// pasaba en local, donde es_CL.UTF-8 sí existe (DOMAINSERV-276).
 	conLocale := func(locale string) string {
 		cmd := exec.Command("bash", "-c", ". "+lib+" && domain_tests_code_hash")
 		cmd.Dir = raiz
 		cmd.Env = append(os.Environ(), "LC_ALL="+locale, "LANG="+locale)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("bash con LC_ALL=%s falló: %v\n%s", locale, err, out)
+		var stdout, stderr strings.Builder
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("bash con LC_ALL=%s falló: %v\nstderr: %s", locale, err, stderr.String())
 		}
-		return strings.TrimSpace(string(out))
+		return strings.TrimSpace(stdout.String())
 	}
 
 	enC := conLocale("C")
-	enES := conLocale("es_CL.UTF-8")
-
 	if enC == "" {
 		t.Fatal("la función devolvió vacío")
 	}
-	if enC != enES {
-		t.Errorf("el hash cambia con el locale.\n  LC_ALL=C: %s\n  es_CL:    %s\n"+
-			"Si el post-test escribe el marker con un locale y el pre-edit compara con otro, el "+
-			"gate deniega el commit sin razón visible. Falta LC_ALL=C en el sort.", enC, enES)
+
+	// El locale de contraste se elige entre los que la máquina TIENE. Fijar es_CL.UTF-8 hacía
+	// que en un runner sin ese locale el test comparara C contra C —o sea, no probara nada—
+	// además de romperse por el warning. Se prueban TODOS los UTF-8 disponibles: el bug
+	// original (sort de GNU ignorando puntuación) aparece con cualquier collation no-C.
+	otros := localesDeContraste(t)
+	if len(otros) == 0 {
+		t.Skip("esta máquina no tiene ningún locale UTF-8 además de C: el test no puede " +
+			"contrastar collations. En CI eso significa que este guard no verifica nada, y por " +
+			"eso el workflow genera un locale explícitamente antes de correr la suite.")
 	}
+	for _, loc := range otros {
+		if h := conLocale(loc); h != enC {
+			t.Errorf("el hash cambia con el locale.\n  LC_ALL=C: %s\n  %s: %s\n"+
+				"Si el post-test escribe el marker con un locale y el pre-edit compara con otro, "+
+				"el gate deniega el commit sin razón visible. Falta LC_ALL=C en el sort.",
+				enC, loc, h)
+		}
+	}
+}
+
+// localesDeContraste devuelve los locales UTF-8 instalados cuya collation puede diferir de C.
+// C.UTF-8 se excluye: su ordenamiento ES el de C, así que no contrasta nada.
+func localesDeContraste(t *testing.T) []string {
+	t.Helper()
+	out, err := exec.Command("locale", "-a").Output()
+	if err != nil {
+		return nil
+	}
+	var res []string
+	for _, l := range strings.Split(string(out), "\n") {
+		l = strings.TrimSpace(l)
+		bajo := strings.ToLower(l)
+		if !strings.Contains(bajo, "utf") || strings.HasPrefix(bajo, "c.") || bajo == "c" {
+			continue
+		}
+		res = append(res, l)
+		if len(res) == 3 { // con tres alcanza: son collations, no una matriz de idiomas
+			break
+		}
+	}
+	return res
 }
 
 // El hash tiene que CAMBIAR ante una edición, o no sirve para detectar que el código se tocó

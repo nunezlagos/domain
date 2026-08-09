@@ -54,6 +54,17 @@ jobs:
       - name: PowerShell disponible (bootstrap.ps1 se testea sin Windows)
         run: pwsh --version
 
+      # DOMAINSERV-276: TestCodeHash_NoDependeDelLocale contrasta el hash entre la collation
+      # de C y una que NO sea C. El runner solo trae C.UTF-8, cuyo ordenamiento ES el de C,
+      # así que sin generar un locale de verdad el guard pasaría en verde sin comparar nada
+      # — y lo que cubre es un bug REAL ya medido: `sort` de GNU con collation no-C ignora la
+      # puntuación, y el hash del marker cambiaba según el LANG de quien corriera el hook.
+      - name: Generar un locale de contraste (el guard del hash lo necesita)
+        run: |
+          sudo locale-gen es_CL.UTF-8 en_US.UTF-8
+          locale -a | grep -iE 'es_cl|en_us'
+        working-directory: .
+
       - name: go test
         run: go test -count=1 ./...
 

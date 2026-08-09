@@ -21,11 +21,16 @@
 #        compose o dir desconocido; vacio si sin cambios.
 #     -> exit 0 siempre.
 
+# rc 0 = es un servicio y su SVC va por stdout; rc 2 = vive bajo services/ pero NO es un
+# servicio; rc 1 = desconocido. Los tres son distintos a propósito: colapsar el 2 en el 1
+# hacía que un script del host pidiera rebuild de todo el stack.
 svc_for_dir() {
   case "$1" in
     domain-mcp) echo mcp ;;
     domain-admin) echo admin ;;
     postgres|minio|caddy) echo "$1" ;;
+    # corren en el host bajo systemd: no hay imagen que reconstruir
+    scripts|systemd) return 2 ;;
     *) return 1 ;;
   esac
 }
@@ -50,12 +55,15 @@ detect_changed_services() {
     esac
     local first="${path#services/}"
     first="${first%%/*}"
-    local svc
-    if svc="$(svc_for_dir "$first")"; then
-      result="$result $svc"
-    else
-      echo "all"; return 0
-    fi
+    local svc rc
+    svc="$(svc_for_dir "$first")"; rc=$?
+    case "$rc" in
+      0) result="$result $svc" ;;
+      # host-only: sigue al próximo path en vez de cortar, porque el mismo rango puede
+      # traer ademas un servicio de verdad y ese sí tiene que desplegarse
+      2) ;;
+      *) echo "all"; return 0 ;;
+    esac
   done <<< "$diff_out"
 
   echo "$result" | tr ' ' '\n' | grep -v '^$' | sort -u | paste -sd ' ' - | sed 's/ $//'

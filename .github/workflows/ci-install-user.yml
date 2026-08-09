@@ -49,6 +49,35 @@ jobs:
       - name: go test
         run: go test -count=1 ./...
 
+      # DOMAINSERV-270: el instalador declara soportar Linux, macOS y Windows, y hasta acá
+      # NADA fuera de ubuntu-latest se ejecutaba nunca. Esto cierra la mitad barata del
+      # hueco —que el código COMPILE en los tres— desde el mismo runner Linux, o sea a
+      # costo cero.
+      #
+      # LO QUE ESTO **NO** CUBRE, y conviene tenerlo escrito para que nadie lea este step
+      # como "multiplataforma verificado":
+      #   · DOMAINSERV-266 (sha256sum ausente en macOS) es de RUNTIME, no de compilación.
+      #     Medido acá simulando la ausencia del binario: 10 tests fallan. Este step los
+      #     deja pasar porque no ejecuta nada.
+      #   · Windows tampoco queda cubierto: 7 archivos de test hacen exec.Command("bash", …)
+      #     y el módulo es UN solo paquete, así que no se pueden excluir selectivamente.
+      #     Es DOMAINSERV-271/273.
+      # Correr los runners nativos se evaluó y se descartó por costo: macOS factura 10x el
+      # minuto y este directorio recibió 50 commits en 30 días con una suite de ~62s.
+      - name: build cross-platform (compila, no ejecuta)
+        run: |
+          set -euo pipefail
+          for par in darwin/arm64 darwin/amd64 windows/amd64 windows/arm64; do
+            GOOS="${par%/*}" GOARCH="${par#*/}" go build -o /dev/null .
+            echo "ok  build $par"
+          done
+          # windows/arm64 va a propósito aunque release-installer.yml todavía no lo publique:
+          # que compile es la precondición para agregarlo a la matriz de release.
+          for par in darwin/arm64 windows/amd64; do
+            GOOS="${par%/*}" GOARCH="${par#*/}" go vet ./...
+            echo "ok  vet   $par"
+          done
+
       # los hooks se distribuyen como scripts, así que un error de sintaxis no aparece
       # hasta que el hook corre en la máquina de alguien
       - name: Sintaxis de los hooks y guards shell

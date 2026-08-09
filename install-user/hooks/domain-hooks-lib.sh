@@ -135,5 +135,15 @@ domain_test_cmd_sugerido() {
   [ -f "$dir/Cargo.toml" ]     && { printf 'cargo test'; return 0; }
   [ -f "$dir/composer.json" ]  && { printf 'phpunit'; return 0; }
   [ -f "$dir/Gemfile" ]        && { printf 'rspec'; return 0; }
+  # DOMAINSERV-254: un repo sin manifest de stack puede tener igual una suite ejecutable
+  # —este mismo repo la tiene en scripts/tests/— y el post-test ya la reconoce. Callar acá
+  # hacía que el deny la declarara "de otro tipo" y mandara al bypass una suite que el
+  # gate podía aceptar: las dos puntas divergían, que es exactamente el bug de arriba.
+  local f
+  for f in "$dir"/scripts/tests/test_*.sh "$dir"/*_test.sh; do
+    [ -f "$f" ] || continue
+    printf 'bash %s' "${f#"$dir"/}"
+    return 0
+  done
   return 0
 }

@@ -15,7 +15,12 @@ FAILS=0
 run() {
   local sess="$1" payload="$2" home
   home="$(mktemp -d)"
-  printf '%s' "$payload" | HOME="$home" bash "$HOOK" >/dev/null 2>&1
+  # cd al dir del hook y no al cwd de quien invoca: cuando el payload no trae cwd, el
+  # hook resuelve el alcance con os.getcwd() y raiz_de_modulo() sube buscando go.mod.
+  # Desde install-user/ (que tiene go.mod) el caso de `go test` da marker; desde la raíz
+  # del monorepo (que no tiene) da vacío y el mismo caso sale ROJO. CI la corre con
+  # working-directory: install-user, así que la trampa solo aparecía al correrla a mano.
+  ( cd "$SCRIPT_DIR" && printf '%s' "$payload" | HOME="$home" bash "$HOOK" >/dev/null 2>&1 )
   if [ -f "$home/.local/state/domain/tests-ok-$sess" ]; then echo "yes"; else echo "no"; fi
   rm -rf "$home"
 }
@@ -106,6 +111,47 @@ done
 #     un path con "-h" adentro. Si esto fallara, el fix del 9 rompió el caso normal.
 check "la exclusión no mata una corrida real con -h en un path" "yes" \
   "$(run "s10" "{\"session_id\":\"s10\",\"tool_input\":{\"command\":\"python3 -m unittest config.tests.test_hook-handler\"},\"tool_response\":$resp_py_ok}")"
+
+# 11) DOMAINSERV-254: las suites de scripts/tests/ nombran con PREFIJO test_, no con
+#     sufijo _test.sh. Exigir el sufijo dejaba fuera a las 11 suites del repo y el deny
+#     las declaraba "de otro tipo", empujando al bypass una suite que el hook sí podía
+#     reconocer. Se prueban las formas reales de invocación, incluida la documentada en
+#     la cabecera de las propias suites (`bash scripts/tests/test_x.sh`).
+for c in 'bash scripts/tests/test_deploy.sh' './scripts/tests/test_path_filters.sh' \
+         'bash ./scripts/tests/test_auto_deploy_check.sh' 'bash scripts/tests/test-vps-local.sh'; do
+  check "suite con prefijo test_ reconocida: $c" "yes" \
+    "$(run "s11" "{\"session_id\":\"s11\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":$resp_ok}")"
+done
+
+# 11b) SABOTAJE del 11: el patrón nuevo NO debe tragarse cualquier .sh bajo un path que
+#      contenga "test". Si esto fallara, reconoceríamos como suite un script cualquiera.
+for c in 'bash scripts/deploy.sh' './scripts/redeploy.sh' 'bash install-user/testdata/guard-sandbox/casos.sh'; do
+  check "no-suite sigue sin reconocerse: $c" "no" \
+    "$(run "s11b" "{\"session_id\":\"s11b\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":$resp_ok}")"
+done
+
+# 12) CONTRA-PRUEBA de 11, y la mitad que de verdad importa: estas suites reportan en
+#     ESPAÑOL y con el FAIL indentado. Reconocer el runner sin reconocer su rojo sería
+#     peor que no reconocerlo — `ok = is_test and not signal_fail` acuñaría el marker
+#     tests-ok sobre una suite ROJA, porque el tool_response no expone exit_code.
+for salida in '  FAIL: caso (e) divergencia -> rc=1\nRED — 3 asserts fallaron' \
+              'FALLA test_algo\nRED — 3 de 12 tests fallaron' \
+              'FAIL: algo\n\nRED — 2 fallaron, 5 pasaron'; do
+  resp_es_fail="{\"stdout\":\"$salida\",\"stderr\":\"\",\"interrupted\":false,\"isImage\":false}"
+  check "suite de shell en rojo (español) -> sin marker" "no" \
+    "$(run "s12" "{\"session_id\":\"s12\",\"tool_input\":{\"command\":\"bash scripts/tests/test_deploy.sh\"},\"tool_response\":$resp_es_fail}")"
+done
+
+# 12b) Y el verde real de esas mismas suites SÍ tiene que acuñar el marker, incluido el
+#      "AMARILLO — 0 fallaron" y el "RED:" intermedio de las que verifican fase roja de
+#      TDD: si el patrón del rojo se pasa de ancho, el gate queda insatisfacible.
+for salida in 'PASS: todo bien\nGREEN — todos los tests pasaron' \
+              'AMARILLO — 0 fallaron, pero 2 no corrieron' \
+              'RED: el archivo no existe aun — esperado para green\nGREEN — los 9 asserts pasaron'; do
+  resp_es_ok="{\"stdout\":\"$salida\",\"stderr\":\"\",\"interrupted\":false,\"isImage\":false}"
+  check "suite de shell en verde (español) -> marker escrito" "yes" \
+    "$(run "s12b" "{\"session_id\":\"s12b\",\"tool_input\":{\"command\":\"bash scripts/tests/test_deploy.sh\"},\"tool_response\":$resp_es_ok}")"
+done
 
 if [ "$FAILS" -gt 0 ]; then printf '\n%d test(s) FALLARON\n' "$FAILS"; exit 1; fi
 printf '\nTodos los tests pasaron\n'

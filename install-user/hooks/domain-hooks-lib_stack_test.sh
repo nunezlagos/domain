@@ -61,6 +61,28 @@ echo "--- sin manifest reconocible"
 # determinar cómo correr tests acá" en vez de mandar a correr algo imposible
 caso desconocido "" ""
 
+echo "--- sin manifest pero CON suite de shell (DOMAINSERV-254)"
+# este repo no tiene manifest en la raíz y sí tiene scripts/tests/test_*.sh. Callar acá
+# hacía que el deny declarara la suite "de otro tipo" y mandara al bypass una suite que
+# el post-test ya reconoce: las dos puntas del gate divergían.
+d="$WORK/shell-suite"; mkdir -p "$d/scripts/tests"; printf '#!/bin/bash\n' > "$d/scripts/tests/test_deploy.sh"
+obtenido=$(domain_test_cmd_sugerido "$d")
+if [ "$obtenido" = "bash scripts/tests/test_deploy.sh" ]; then
+  pass "sin manifest y con scripts/tests/test_*.sh -> sugiere la suite de shell"
+else
+  fail "suite de shell: esperaba 'bash scripts/tests/test_deploy.sh', obtuve '$obtenido'"
+fi
+
+# y el manifest sigue ganando: el fallback es último recurso, no un atajo que tape al stack
+d="$WORK/go-y-shell"; mkdir -p "$d/scripts/tests"; printf 'module x\n' > "$d/go.mod"
+printf '#!/bin/bash\n' > "$d/scripts/tests/test_x.sh"
+obtenido=$(domain_test_cmd_sugerido "$d")
+if [ "$obtenido" = "go test -count=1 ./..." ]; then
+  pass "con go.mod presente el manifest le gana al fallback de shell"
+else
+  fail "go+shell: esperaba que ganara Go, obtuve '$obtenido'"
+fi
+
 echo "--- monorepo: go.mod y package.json juntos"
 d="$WORK/mixto"; mkdir -p "$d"; printf 'module x\n' > "$d/go.mod"; printf '{}\n' > "$d/package.json"
 obtenido=$(domain_test_cmd_sugerido "$d")

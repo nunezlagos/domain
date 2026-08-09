@@ -76,6 +76,55 @@ build_phase() {
   ( cd "$DEPLOY_REPO_ROOT/services" && make build SVC="$CHANGED_SVC" )
 }
 
+# Caddy es el UNICO borde HTTP del host y ademas sirve otros sitios. Se valida contra la
+# imagen con plugins ANTES de tocar nada: si el Caddyfile no adapta, el deploy aborta con
+# el stack anterior intacto y sirviendo. Validarlo despues del restart seria diagnosticar
+# con el sitio ya caido. Mismo pre-flight que services/install.sh:406-418.
+preflight_phase() {
+  if [[ "${NOOP:-0}" == "1" ]]; then
+    log_phase "preflight: skipped (noop)"; return 0
+  fi
+  log_phase "preflight: Caddyfile contra la imagen con plugins"
+  if (( DRY_RUN )); then
+    echo "dry-run: docker compose build caddy + caddy validate"
+    return 0
+  fi
+  local caddyfile="$DEPLOY_REPO_ROOT/services/caddy/Caddyfile"
+  [[ -f "$caddyfile" ]] || { log_phase "preflight: sin Caddyfile en $caddyfile"; return 0; }
+  ( cd "$DEPLOY_REPO_ROOT/services" && docker compose -f caddy/docker-compose.yml --env-file .env build ) \
+    || { log_phase "preflight: no se pudo buildear la imagen de Caddy — abortando con el stack intacto"; return 1; }
+  docker run --rm -v "$caddyfile:/etc/caddy/Caddyfile:ro" \
+    -e CROWDSEC_BOUNCER_API_KEY=preflight \
+    domain-caddy:plugins caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1 \
+    || { log_phase "preflight: el Caddyfile NO valida — abortando con el stack intacto"; return 1; }
+}
+
+# El init-container domain-migrate ABORTA si la BD tiene datos y no hubo pg_dump, y su
+# mensaje dice "Redeploy via services/install.sh": fue escrito para ESE camino. El
+# auto-deploy usa este script, asi que sin esto nunca podia satisfacerlo — y el 2026-08-09
+# se llevo puestos a mcp, admin y caddy por depends_on.
+backup_phase() {
+  if [[ "${NOOP:-0}" == "1" ]]; then
+    log_phase "backup: skipped (noop, no se levanta nada)"; return 0
+  fi
+  if (( DRY_RUN )); then
+    echo "dry-run: backup.sh pre-migracion"
+    return 0
+  fi
+  local guard="$DEPLOY_REPO_ROOT/services/scripts/pg-backup-guard.sh"
+  # shellcheck source=/dev/null
+  [[ -f "$guard" ]] && source "$guard"
+  if declare -F should_run_pre_migration_backup >/dev/null && ! should_run_pre_migration_backup; then
+    log_phase "backup: sin volumen de datos, se omite"
+    return 0
+  fi
+  log_phase "backup: pre-migracion"
+  "$DEPLOY_REPO_ROOT/services/scripts/backup.sh" \
+    || { log_phase "backup: FALLO — abortando el deploy para no migrar sin respaldo"; return 1; }
+  # la marca que el guard de migrate espera
+  export DOMAIN_BACKUP_DONE=1
+}
+
 restart_phase() {
   if [[ "${NOOP:-0}" == "1" ]]; then
     log_phase "restart: skipped (noop)"; return 0
@@ -97,7 +146,19 @@ verify_phase() {
     echo "dry-run: make -C services wait-healthy + curl healthz"
     return 0
   fi
-  ( cd "$DEPLOY_REPO_ROOT/services" && make wait-healthy )
+  ( cd "$DEPLOY_REPO_ROOT/services" && make wait-healthy ) || return 1
+  # wait-healthy mira los healthchecks de docker, y un container puede estar healthy con
+  # el sitio sin responder: el 2026-08-09 quedaron containers healthy y el endpoint en 000
+  # porque caddy directamente no existia. Solo un GET real lo distingue.
+  log_phase "verify: self-check HTTP"
+  local code
+  for _ in $(seq 1 60); do
+    code=$(curl -fsS -o /dev/null -w '%{http_code}' -m 5 http://localhost/healthz 2>/dev/null || true)
+    [[ "$code" == "200" ]] && { log_phase "verify: /healthz 200"; return 0; }
+    sleep 2
+  done
+  log_phase "verify: /healthz no respondio 200 (ultimo code=${code:-sin-respuesta})"
+  return 1
 }
 
 rollback_handler() {
@@ -125,6 +186,10 @@ main() {
     return 0
   fi
   build_phase
+  # el preflight va antes del backup a proposito: es el chequeo barato y aborta sin haber
+  # pagado un pg_dump de decenas de MB
+  preflight_phase
+  backup_phase
   restart_phase
   verify_phase
   log_phase "=== deploy done ==="

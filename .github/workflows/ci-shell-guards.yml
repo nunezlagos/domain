@@ -63,7 +63,10 @@ jobs:
           scripts/tests/test_auto_deploy_alerta.sh
           scripts/tests/test_auto_deploy_check.sh
           scripts/tests/test_auto_deploy_entorno.sh
+          scripts/tests/test_capas_independientes.sh
           scripts/tests/test_deploy.sh
+          scripts/tests/test_deploy_paridad.sh
+          scripts/tests/test_detect_changed.sh
           scripts/tests/test_install_normaliza_duenos.sh
           scripts/tests/test_orchestrator.sh
           scripts/tests/test_path_filters.sh
@@ -74,6 +77,7 @@ jobs:
           services/scripts/config-drift_test.sh
           services/scripts/healthcheck-alert_test.sh
           services/scripts/monitoring-verify_test.sh
+          services/scripts/normalizar-duenos_certs_test.sh
           services/scripts/pg-backup-guard_test.sh
           EOF
           )
@@ -105,7 +109,7 @@ jobs:
       # root (chown para que el dueño difiera del euid, y systemd-run en scope system). Sin
       # privilegios SKIPea y el job queda verde SIN haber verificado nada — el mismo falso
       # verde que DOMAINSERV-258 combate. La verificación real de ese fix es contra el VPS.
-      - name: Correr las 15 suites
+      - name: Correr las 19 suites
         run: |
           set -uo pipefail
           fallidas=""
@@ -113,14 +117,18 @@ jobs:
             scripts/tests/test_auto_deploy_alerta.sh \
             scripts/tests/test_auto_deploy_check.sh \
             scripts/tests/test_auto_deploy_entorno.sh \
+            scripts/tests/test_capas_independientes.sh \
             scripts/tests/test_install_normaliza_duenos.sh \
             scripts/tests/test_deploy.sh \
+            scripts/tests/test_deploy_paridad.sh \
+            scripts/tests/test_detect_changed.sh \
             scripts/tests/test_orchestrator.sh \
             scripts/tests/test_path_filters.sh \
             services/install-version-stamp_test.sh \
             services/scripts/config-drift_test.sh \
             services/scripts/healthcheck-alert_test.sh \
             services/scripts/monitoring-verify_test.sh \
+            services/scripts/normalizar-duenos_certs_test.sh \
             services/scripts/pg-backup-guard_test.sh \
             services/domain-mcp/deploy/monitoring/loki-config_test.sh \
             services/domain-mcp/deploy/monitoring/tarpit_test.sh \

@@ -21,6 +21,13 @@
 # Cambia PROPIETARIO y nunca MODO. Un chmod en masa le quitaría a prometheus (nobody), loki
 # (10001) y grafana (472) la lectura de sus configs montadas read-only: esos containers leen
 # por el permiso de otros, no por dueño, así que el chown es inocuo para ellos y el chmod no.
+#
+# Ese razonamiento vale para configs 644 y NO para certs/, que quedó afuera del recorrido:
+# server.key está en 600 —el bit de otros no interviene— y postgres valida el OWNERSHIP
+# explícitamente ("must be owned by the database user or root"), así que aborta aunque los
+# permisos sean correctos. Su dueño es el uid 999 de DENTRO del container, que un chown del
+# host no puede reconstruir. Tumbó producción el 2026-08-09: postgres en crash loop, su
+# nombre nunca llegó al DNS de la red, y con el migrate caído se cayeron mcp, caddy y admin.
 normalizar_duenos() {
   local dir="${1:-}" dueno="${2:-sysadmin}"
   DUENOS_CAMBIADOS=0
@@ -46,8 +53,11 @@ normalizar_duenos() {
 
   # -c reporta SOLO lo que cambió: es lo que hace al paso idempotente y medible. Contar lo
   # recorrido en vez de lo cambiado haría que la segunda corrida reporte trabajo inexistente.
-  local cambios
-  cambios="$(chown -Rc "$dueno" "$dir" 2>/dev/null)" || return 1
+  # el loop en vez de `find -exec` o `xargs`: así el paso queda verificable con un chown
+  # stubeado, que es la única forma de probarlo sin ser root
+  local cambios ruta
+  cambios="$(find "$dir" -path "$dir/certs" -prune -o -print 2>/dev/null \
+    | while IFS= read -r ruta; do chown -c "$dueno" "$ruta" 2>/dev/null; done)" || return 1
   DUENOS_CAMBIADOS="$(printf '%s' "$cambios" | grep -c . || true)"
 
   return 0

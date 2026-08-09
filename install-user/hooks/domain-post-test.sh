@@ -49,10 +49,13 @@ cmd = (d.get("tool_input") or {}).get("command", "") or ""
 # `bash x_test.sh`) no se reconocían → el marker nunca se escribía y el
 # commit-gate quedaba insatisfacible al tocar justamente estos archivos.
 # DOMAINSERV-175: los runners de domain-admin; python\S* cubre python3 y rutas de venv
+# DOMAINSERV-254: exigir el sufijo _test.sh dejaba fuera las 11 suites de scripts/tests/,
+# que este repo nombra con PREFIJO (test_deploy.sh, test_detect_changed.sh, …). El deny
+# las declaraba "de otro tipo" y mandaba al bypass una suite que el hook podía reconocer.
 test_re = re.compile(
     r"\b(go\s+test|npm\s+(run\s+)?test|pytest|jest|vitest|cargo\s+test|phpunit|rspec"
     r"|make\s+test|python\S*\s+-m\s+unittest|manage\.py\s+test)\b"
-    r"|(?:\bbash\s+|\bsh\s+|\./)\S*_test\.sh\b"
+    r"|(?:\bbash\s+|\bsh\s+|\./)(?:\S*/)?(?:test[_-]\S*\.sh|\S*_test\.sh)\b"
 )
 # --help sale exit 0 y sin FAIL, así que marcaba verde sin correr nada; token
 # suelto para no comerse un path con "-h" adentro
@@ -198,7 +201,7 @@ output = "\n".join(out_parts)
 # Señales de fallo en el output de las suites soportadas. Diseñadas para NO
 # disparar con "0 failed" / "0 failures" (exigen un número >= 1).
 fail_patterns = [
-    r"(?m)^FAIL\b",                          # go: línea FAIL\tpkg
+    r"(?m)^[ \t]*FAIL\b",                    # go: línea FAIL\tpkg · shell: "  FAIL: label"
     r"--- FAIL:",                            # go: subtests
     r"\bpanic:\s",                           # go: panic
     r"test result:\s*FAILED",                # cargo test
@@ -208,6 +211,14 @@ fail_patterns = [
     r"(?im)\b[1-9]\d*\s+failure(s)?\b",      # rspec: "N failures"
     # unittest: ^FAIL\b no matchea FAILED porque la E rompe el \b (DOMAINSERV-175)
     r"FAILED\s*\([^)]*(?:failures|errors)=[1-9]",
+    # DOMAINSERV-254: las suites de shell de este repo reportan en español. Reconocer su
+    # runner sin reconocer su rojo sería peor que no reconocerlo: `ok = is_test and not
+    # signal_fail` (abajo) acuñaría el marker tests-ok sobre una suite ROJA, porque el
+    # tool_response de Bash no expone exit_code.
+    r"(?m)^[ \t]*FALLA\b",                   # test_install_normaliza_duenos.sh
+    # "3 fallaron" / "3 asserts fallaron" / "3 de 12 tests fallaron". El [1-9] deja pasar
+    # el "AMARILLO — 0 fallaron" de test_auto_deploy_entorno.sh, que es verde.
+    r"(?im)\b[1-9]\d*(?:\s+\S+){0,3}\s+fallaron\b",
 ]
 signal_fail = any(re.search(p, output) for p in fail_patterns)
 

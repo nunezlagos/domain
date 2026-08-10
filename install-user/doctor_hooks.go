@@ -35,7 +35,11 @@ func checkHooks(home string) int {
 	for _, spec := range claudeHooks {
 		hookPath := filepath.Join(hooksDir, spec.Script)
 		scriptOK := fileExists(hookPath)
-		regOK := hooks != nil && claudeHookRegistered(hooks, spec.Event, hookPath)
+		// el comando registrado se resuelve con la MISMA función que lo escribe: un hook
+		// portado a Go se registra como `<binario> hook <sub>`, y buscar el path del .sh lo
+		// daría por no registrado (DOMAINSERV-273)
+		comando, cmdErr := comandoDelHook(spec, hooksDir)
+		regOK := cmdErr == nil && hooks != nil && claudeHookRegistered(hooks, spec.Event, comando)
 		// DOMAINSERV-239: hasta acá el chequeo era solo fileExists, porque los hooks no estaban
 		// embebidos y no había con qué comparar. Ahora sí: un hook presente pero DIVERGENTE del
 		// binario se reporta, que es la diferencia entre "el archivo está" y "el archivo es el
@@ -103,7 +107,14 @@ func checkHookMatchers(home string) int {
 			continue
 		}
 		hooksDir := HooksDirDelSistema()
-		hookPath := filepath.Join(hooksDir, spec.Script)
+		// mismo motivo que en checkHooks: el matcher se busca por el comando REGISTRADO, que
+		// para un hook portado a Go no es el path del .sh
+		hookPath, err := comandoDelHook(spec, hooksDir)
+		if err != nil {
+			failL(fmt.Sprintf("%s (%s): %v", spec.Script, spec.Event, err))
+			fails++
+			continue
+		}
 		expected := spec.Matcher
 
 		got := claudeHookGetMatcher(hooks, spec.Event, hookPath)

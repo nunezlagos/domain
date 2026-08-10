@@ -125,6 +125,13 @@ func main() {
 		return
 	}
 
+	// DOMAINSERV-273: los lifecycle hooks como subcomandos del binario. Va ANTES que todo lo
+	// demás porque corre en cada evento de la sesión: no puede pagar el costo ni los efectos
+	// de ninguna otra ruta. Y sale por su propio código —siempre 0— sin tocar el resto.
+	if flag.Arg(0) == "hook" {
+		os.Exit(ejecutarHook(flag.Arg(1), os.Stdin, DetectPlatform().Home()))
+	}
+
 	// Antes que doctor: el hook lo invoca en cada arranque de sesión y no puede pagar el
 	// costo ni los efectos de ninguna otra ruta.
 	if showVersion || flag.Arg(0) == "version" {

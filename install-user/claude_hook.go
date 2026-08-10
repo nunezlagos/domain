@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -15,6 +16,13 @@ type claudeHookSpec struct {
 	// Matcher filtra el hook por tool name (regex) en eventos que lo soportan
 	// (PreToolUse/PostToolUse). Vacío = sin matcher (el hook corre siempre).
 	Matcher string
+	// Subcomando, si está, hace que el hook se registre como `<binario> hook <subcomando>`
+	// en vez del path del .sh (DOMAINSERV-273). Es lo que permite portarlos de a uno: los
+	// que todavía no tienen subcomando siguen registrándose como script.
+	//
+	// Se usa el path ABSOLUTO del binario y no su nombre: depender del PATH ataría este
+	// trabajo a DOMAINSERV-263, que es justamente el ticket de que el binario no está ahí.
+	Subcomando string
 }
 
 // claudeHooks es el set de lifecycle hooks de domain (REQ-54):
@@ -29,7 +37,11 @@ type claudeHookSpec struct {
 var claudeHooks = []claudeHookSpec{
 	{Event: "SessionStart", Script: "domain-session-start.sh"},
 	{Event: "UserPromptSubmit", Script: "domain-user-prompt.sh", Timeout: 15},
-	{Event: "Stop", Script: "domain-stop.sh", Timeout: 15},
+	// DOMAINSERV-273: primero de los 7 en portarse a Go. Se eligió por ser el más chico (73
+	// líneas) para validar el patrón completo —subcomando, registro, tests, distribución—
+	// antes de tocar domain-pre-edit.sh, que son 1.593 y es el gate que autoriza las
+	// ediciones con las que se lo arreglaría.
+	{Event: "Stop", Script: "domain-stop.sh", Timeout: 15, Subcomando: "stop"},
 	// REQ-54 issue-54.7: gate SDD-para-código. PostToolUse marca flow activo
 	// cuando el agente orquesta; PreToolUse intercepta ediciones sin flow
 	// (ask en modo normal, deny en modos automáticos).
@@ -45,6 +57,29 @@ var claudeHooks = []claudeHookSpec{
 	// que el auto-behavior de domain lo observe (SUGGEST-ONLY, best-effort).
 	{Event: "PostToolUse", Script: "domain-post-test.sh", Timeout: 10,
 		Matcher: "Bash"},
+}
+
+// comandoDelHook devuelve el `command` con el que se registra un hook: el binario con su
+// subcomando si ya está portado a Go, o el path del script si todavía no (DOMAINSERV-273).
+//
+// El .sh se sigue exigiendo en disco aunque el hook esté portado. No es redundancia: el
+// instalador lo instala igual, y tenerlo permite volver atrás editando settings.json si el
+// subcomando fallara en una plataforma donde no lo pudimos probar.
+func comandoDelHook(spec claudeHookSpec, hooksDir string) (string, error) {
+	hookPath := filepath.Join(hooksDir, spec.Script)
+	if _, err := os.Stat(hookPath); err != nil {
+		return "", fmt.Errorf("hook script no encontrado en %s (re-corré el install canónico para instalarlo)", hookPath)
+	}
+	if spec.Subcomando == "" {
+		return hookPath, nil
+	}
+	binario, err := os.Executable()
+	if err != nil {
+		// sin path del binario el registro quedaría apuntando a un nombre suelto, que depende
+		// del PATH — exactamente lo que este diseño evita
+		return "", fmt.Errorf("no se pudo resolver el path del binario para el hook %s: %v", spec.Event, err)
+	}
+	return binario + " hook " + spec.Subcomando, nil
 }
 
 // installClaudeSessionStartHook registra los lifecycle hooks de domain en
@@ -74,9 +109,9 @@ func installClaudeSessionStartHook() {
 
 	changed := false
 	for _, spec := range claudeHooks {
-		hookPath := filepath.Join(hooksDir, spec.Script)
-		if _, err := os.Stat(hookPath); err != nil {
-			warnL("hook script no encontrado en " + hookPath + " (re-corré el install canónico para instalarlo)")
+		hookPath, err := comandoDelHook(spec, hooksDir)
+		if err != nil {
+			warnL(err.Error())
 			continue
 		}
 		if exists, updated := reconcileClaudeHook(hooks, spec.Event, hookPath, spec.Matcher); exists {

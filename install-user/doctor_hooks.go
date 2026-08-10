@@ -18,8 +18,20 @@ func checkHooks(home string) int {
 		return len(claudeHooks)
 	}
 	hooks, _ := cfg["hooks"].(map[string]any)
+	manifiesto := cargarManifiesto(DetectPlatform().Paths().HooksManifest)
 
 	fails := 0
+	// DOMAINSERV-267: domain-hooks-lib.sh se audita aunque NO esté en claudeHooks. No es un hook
+	// registrado —es la lib que todos cargan con `. "$LIB"`— así que iterar solo claudeHooks la
+	// dejaba afuera: quedaba vieja sin que nada lo dijera, y los hooks fallaban en su primera
+	// línea útil con un error que se lee como "el gate no anda".
+	if libPath := filepath.Join(hooksDir, "domain-hooks-lib.sh"); fileExists(libPath) {
+		reportarProcedencia("(lib)", "domain-hooks-lib.sh", libPath, manifiesto)
+	} else {
+		failL("falta domain-hooks-lib.sh: los hooks que la cargan fallan en su primera línea útil")
+		fails++
+	}
+
 	for _, spec := range claudeHooks {
 		hookPath := filepath.Join(hooksDir, spec.Script)
 		scriptOK := fileExists(hookPath)
@@ -29,12 +41,7 @@ func checkHooks(home string) int {
 		// binario se reporta, que es la diferencia entre "el archivo está" y "el archivo es el
 		// que debería ser".
 		if scriptOK && regOK {
-			if divergeDelEmbebido(spec.Script, hookPath) {
-				warnL(fmt.Sprintf("%s → %s: registrado pero el contenido DIFIERE del que trae el binario",
-					spec.Event, spec.Script))
-				continue
-			}
-			ok(fmt.Sprintf("%s → %s (registrado + hash coincide)", spec.Event, spec.Script))
+			reportarProcedencia(spec.Event, spec.Script, hookPath, manifiesto)
 			continue
 		}
 		if !scriptOK {
@@ -46,6 +53,34 @@ func checkHooks(home string) int {
 		fails++
 	}
 	return fails
+}
+
+// reportarProcedencia dice de QUIÉN es la diferencia cuando el disco no coincide con el
+// binario. Antes las dos causas salían por el mismo warning —"el contenido DIFIERE"— y no se
+// podía saber cuál era: la que se arregla corriendo el instalador, o la que se perdería si
+// alguien lo corre (DOMAINSERV-267).
+//
+// Ninguno de los dos casos suma a `fails`, y es deliberado. "Quedó viejo" lo resuelve el
+// propio instalador en su próxima corrida, así que no es un estado que exija intervención; y
+// "lo editaste vos" es una decisión del usuario, no un defecto. Marcarlos críticos dejaría el
+// doctor en rojo permanente y la presión operativa terminaría sacando el guard —el modo de
+// falla que el ticket advierte— sin que ninguno de los dos casos lo amerite.
+func reportarProcedencia(evento, script, hookPath string, manifiesto manifiestoAgentes) {
+	embebido, err := hooksFS.ReadFile("hooks/" + script)
+	if err != nil {
+		warnL(fmt.Sprintf("%s → %s: no está embebido en este binario, no hay contra qué compararlo", evento, script))
+		return
+	}
+	switch clasificar(hookPath, embebido, manifiesto[script]) {
+	case alDia:
+		ok(fmt.Sprintf("%s → %s (registrado + hash coincide)", evento, script))
+	case deDomain:
+		warnL(fmt.Sprintf("%s → %s: quedó de una versión anterior — corré el instalador y se actualiza solo",
+			evento, script))
+	default:
+		warnL(fmt.Sprintf("%s → %s: tiene cambios locales, el instalador NO lo va a pisar",
+			evento, script))
+	}
 }
 
 // checkHookMatchers verifica que cada hook registrado en settings.json tenga el

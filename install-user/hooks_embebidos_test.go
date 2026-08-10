@@ -43,29 +43,121 @@ func TestHooksLifecycle_EstanEmbebidosEnElBinario(t *testing.T) {
 	}
 }
 
-// MODO 3: un binario viejo sobre hooks nuevos NO puede pisarlos en silencio. El archivo en juego
-// es domain-pre-edit.sh, o sea el gate SDD.
-func TestInstalarHook_ArchivoDivergente_NoLoPisa(t *testing.T) {
+// CAMBIO DE CONTRATO DELIBERADO (DOMAINSERV-267). Este test fijaba la política de
+// DOMAINSERV-239 —"ningún archivo divergente se pisa, nunca"— y se reescribe a propósito, no
+// se borra. La diferencia entre los dos tickets importa y conviene que quede acá:
+//
+//	el 239 se protegía de ADULTERACIÓN: un tercero sustituyendo el gate SDD. Como no tenía
+//	con qué distinguir eso de "quedó viejo", eligió no tocar nada. Correcto para lo que
+//	atacaba, pero dejó el canal de distribución sin distribuir: un fix de hook no llegaba a
+//	ninguna máquina y el install lo reportaba como éxito.
+//
+//	el 267 agrega el manifiesto, que ES esa distinción. Lo que domain escribió se pisa; lo
+//	que no reconoce se respeta. La protección del 239 sigue viva —la cubre el test de acá
+//	abajo, con manifiesto presente y contenido ajeno— y ahora el upgrade legítimo funciona.
+//
+// El caso SIN manifiesto (la primera corrida de cualquier máquina del parque) se pisa CON
+// backup: es la política de gracia decidida con el usuario. La alternativa —respetar por
+// defecto— dejaba a todo el parque sin poder actualizarse salvo borrando hooks a mano.
+func TestInstalarHook_DivergenteSinManifiesto_LoPisaConBackup(t *testing.T) {
 	dir := t.TempDir()
 	destino := filepath.Join(dir, "domain-pre-edit.sh")
-	previo := []byte("#!/usr/bin/env bash\n# version en disco, distinta de la embebida\n")
+	previo := []byte("#!/usr/bin/env bash\n# version vieja en disco, sin registro en el manifiesto\n")
 	if err := os.WriteFile(destino, previo, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	res := instalarHookEmbebido("domain-pre-edit.sh", dir)
+	res := instalarHookEmbebido("domain-pre-edit.sh", dir, manifiestoAgentes{})
 
+	if res != hookEscrito {
+		t.Fatalf("sin manifiesto previo el hook NO se actualizó (res=%v): todo el parque instalado "+
+			"hoy está en ese estado, así que ningún fix de hook llegaría a ninguna máquina", res)
+	}
+	esperado, _ := hooksFS.ReadFile("hooks/domain-pre-edit.sh")
 	actual, err := os.ReadFile(destino)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(actual) != string(previo) {
-		t.Error("el hook divergente fue PISADO: un binario de un tag anterior degradaría el gate " +
-			"SDD sin aviso y sin backup")
+	if string(actual) != string(esperado) {
+		t.Error("el hook quedó con el contenido viejo pese a reportarse como escrito")
 	}
+
+	// el backup es lo que hace reversible la gracia: sin él, una edición del usuario se
+	// perdería sin rastro en esa primera corrida
+	entradas, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var backup string
+	for _, e := range entradas {
+		if strings.HasPrefix(e.Name(), "domain-pre-edit.sh.bak-") {
+			backup = filepath.Join(dir, e.Name())
+		}
+	}
+	if backup == "" {
+		t.Fatal("se pisó el hook sin dejar backup: si el usuario lo había editado, ese cambio se " +
+			"perdió y no hay de dónde recuperarlo")
+	}
+	guardado, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(guardado) != string(previo) {
+		t.Error("el backup no tiene el contenido que había en disco")
+	}
+}
+
+// La protección de DOMAINSERV-239 SIGUE VIVA: con manifiesto presente, un contenido que
+// domain no reconoce es del usuario y no se toca.
+func TestInstalarHook_EditadoPorElUsuario_NoLoPisa(t *testing.T) {
+	dir := t.TempDir()
+	destino := filepath.Join(dir, "domain-pre-edit.sh")
+	editado := []byte("#!/usr/bin/env bash\n# lo edité yo y quiero conservarlo\n")
+	if err := os.WriteFile(destino, editado, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// el manifiesto declara OTRO hash: lo que hay en disco no es lo que domain escribió
+	manifiesto := manifiestoAgentes{"domain-pre-edit.sh": sha256Hex([]byte("lo que domain había escrito"))}
+
+	res := instalarHookEmbebido("domain-pre-edit.sh", dir, manifiesto)
+
 	if res != hookDivergente {
-		t.Errorf("la divergencia no se reporta (res=%v): pisar en silencio y callar son el mismo "+
-			"defecto para quien opera", res)
+		t.Errorf("un hook editado por el usuario se reportó como %v: pisarlo le borra el trabajo "+
+			"sin preguntar", res)
+	}
+	actual, err := os.ReadFile(destino)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(actual) != string(editado) {
+		t.Error("el hook editado por el usuario fue PISADO")
+	}
+}
+
+// Y el upgrade legítimo, que es lo que el 239 no podía hacer: el disco tiene lo que domain
+// escribió en su momento, el binario trae algo más nuevo, y se actualiza.
+func TestInstalarHook_QuedoViejo_SeActualiza(t *testing.T) {
+	dir := t.TempDir()
+	destino := filepath.Join(dir, "domain-pre-edit.sh")
+	viejo := []byte("#!/usr/bin/env bash\n# lo escribió domain en una versión anterior\n")
+	if err := os.WriteFile(destino, viejo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifiesto := manifiestoAgentes{"domain-pre-edit.sh": sha256Hex(viejo)}
+
+	res := instalarHookEmbebido("domain-pre-edit.sh", dir, manifiesto)
+
+	if res != hookEscrito {
+		t.Fatalf("un hook que domain escribió y quedó viejo NO se actualizó (res=%v): es el canal "+
+			"de distribución roto que motivó DOMAINSERV-267", res)
+	}
+	esperado, _ := hooksFS.ReadFile("hooks/domain-pre-edit.sh")
+	actual, _ := os.ReadFile(destino)
+	if string(actual) != string(esperado) {
+		t.Error("se reportó como escrito pero el contenido no es el embebido")
+	}
+	if manifiesto["domain-pre-edit.sh"] != sha256Hex(esperado) {
+		t.Error("el manifiesto no quedó actualizado: la próxima corrida volvería a creer que está viejo")
 	}
 }
 
@@ -73,7 +165,7 @@ func TestInstalarHook_ArchivoDivergente_NoLoPisa(t *testing.T) {
 func TestInstalarHook_NoExiste_LoEscribe(t *testing.T) {
 	dir := t.TempDir()
 
-	res := instalarHookEmbebido("domain-pre-edit.sh", dir)
+	res := instalarHookEmbebido("domain-pre-edit.sh", dir, manifiestoAgentes{})
 
 	if res != hookEscrito {
 		t.Fatalf("un hook ausente no se instaló (res=%v): una instalación limpia quedaría sin gate", res)
@@ -96,7 +188,7 @@ func TestInstalarHook_YaAlDia_NoHaceNada(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if res := instalarHookEmbebido("domain-stop.sh", dir); res != hookAlDia {
+	if res := instalarHookEmbebido("domain-stop.sh", dir, manifiestoAgentes{}); res != hookAlDia {
 		t.Errorf("un hook idéntico al embebido se reportó como %v en vez de al-día", res)
 	}
 }
@@ -104,7 +196,7 @@ func TestInstalarHook_YaAlDia_NoHaceNada(t *testing.T) {
 // Un gate sin +x no corre, y el fallo sería mudo.
 func TestInstalarHook_QuedaEjecutable(t *testing.T) {
 	dir := t.TempDir()
-	instalarHookEmbebido("domain-pre-edit.sh", dir)
+	instalarHookEmbebido("domain-pre-edit.sh", dir, manifiestoAgentes{})
 
 	info, err := os.Stat(filepath.Join(dir, "domain-pre-edit.sh"))
 	if err != nil {
@@ -125,7 +217,7 @@ func TestInstalarHooks_IncluyeLaLibCompartida(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	instalarHooksLifecycle(dir)
+	instalarHooksLifecycle(dir, filepath.Join(dir, "hooks-manifest.json"))
 
 	if _, err := os.Stat(filepath.Join(dir, "domain-hooks-lib.sh")); err != nil {
 		t.Error("instalarHooksLifecycle no instaló domain-hooks-lib.sh: los hooks la cargan con " +

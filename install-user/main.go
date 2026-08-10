@@ -345,7 +345,12 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	// dejaría la máquina SIN hooks en un install limpio — o con los VIEJOS en un upgrade, donde
 	// hoy quedaban correctos porque los escribía install-curl.sh antes de invocar al binario.
 	step("Instalando lifecycle hooks")
-	instalarHooksLifecycle(paths.AgentHooksDir)
+	// DOMAINSERV-267: el retorno se CONSUME. Antes se descartaba, así que un hook que no se
+	// pudo actualizar no dejaba rastro en el resumen y el install terminaba en verde: el
+	// usuario corría el upgrade, veía éxito, y seguía con los hooks anteriores.
+	if divergentes := instalarHooksLifecycle(paths.AgentHooksDir, paths.HooksManifest); divergentes > 0 {
+		warnL(fmt.Sprintf("%d hook(s) con cambios locales quedaron SIN actualizar — revisá el detalle de arriba", divergentes))
+	}
 
 	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
 	step("Escribiendo precedencia global de domain")

@@ -26,6 +26,13 @@ func setupHealthyHome(t *testing.T) string {
 			t.Fatalf("write %s: %v", p, err)
 		}
 	}
+	// DOMAINSERV-267: domain-hooks-lib.sh no está en claudeHooks —no es un hook registrado—
+	// así que este fixture, que representa una instalación SANA, la venía omitiendo. Una
+	// instalación sin ella no es sana: todos los hooks la cargan con `. "$LIB"` y fallan en su
+	// primera línea útil. El doctor ahora la audita, y el fixture tiene que reflejarlo.
+	if err := os.WriteFile(filepath.Join(hooksDir, "domain-hooks-lib.sh"), []byte("#!/usr/bin/env bash\n"), 0o755); err != nil {
+		t.Fatalf("write domain-hooks-lib.sh: %v", err)
+	}
 
 	// 2. Registro de hooks + permisos + instrucciones globales.
 	installClaudeSessionStartHook()

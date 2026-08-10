@@ -91,6 +91,11 @@ type Paths struct {
 	// quedan solo dos comportamientos, los dos malos: pisar siempre (se pierde la edición) o
 	// no pisar nunca (el catálogo se congela y un fix de template no llega al cliente).
 	AgentsManifest string // ~/.local/share/domain/agents-manifest.json
+	// HooksManifest hace por los lifecycle hooks lo que AgentsManifest por los agentes, y por
+	// la misma razón (DOMAINSERV-267). Sin él, instalarHookEmbebido solo sabía que el disco
+	// DIFIERE del binario, no de quién es esa diferencia, así que elegía no pisar nunca: un
+	// fix de hook no llegaba a ninguna máquina y el install lo reportaba como éxito.
+	HooksManifest string // ~/.local/share/domain/hooks-manifest.json
 }
 
 // HooksDirDelSistema resuelve el directorio de los lifecycle hooks para los callers que no
@@ -123,6 +128,7 @@ func (p Platform) Paths() Paths {
 		GlobalAgentsDir: filepath.Join(home, ".claude", "agents"),
 		AgentHooksDir:   filepath.Join(dataDir, "domain", "hooks"),
 		AgentsManifest:  filepath.Join(dataDir, "domain", "agents-manifest.json"),
+		HooksManifest:   filepath.Join(dataDir, "domain", "hooks-manifest.json"),
 		ClaudeCodeMCP:   filepath.Join(home, ".claude.json"),
 		OpencodeDir:     filepath.Join(configDir, "opencode"),
 		OpencodeMCP:     filepath.Join(configDir, "opencode", "opencode.json"),

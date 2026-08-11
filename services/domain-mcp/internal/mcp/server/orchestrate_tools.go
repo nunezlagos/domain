@@ -411,6 +411,36 @@ func (h *orchestrateHandlers) flowActivoParaGrant(ctx context.Context, flowRunID
 	return ""
 }
 
+// scopeReservadoParaElGrant resuelve la allowlist del request, la valida y reserva el
+// territorio del agente. Devuelve el mensaje de error listo para el caller, o "" si todo
+// salió bien.
+//
+// Está extraída del handler y no inline por size-lint: handleFlowGrantToken ya había cruzado
+// las 50 líneas al sumarle el chequeo de tipo de DOMAINSERV-256, y el diseño de DOMAINSERV-218
+// ya lo anticipaba — "extraer, no engordar". Los tres pasos van juntos porque son un solo
+// invariante: el territorio se reserva ANTES de firmar, así que un scope inválido o solapado
+// no puede dejar un token emitido que el gate después rechace.
+func scopeReservadoParaElGrant(ctx context.Context, req mcp.CallToolRequest, flowRunID, agentID string) ([]string, string) {
+	allowedPaths, err := allowedPathsDelRequest(req)
+	if err != nil {
+		return nil, "flow_grant_token: " + err.Error()
+	}
+
+	// El glob se valida al EMITIR y no al editar (DOMAINSERV-218). Un "**/*.go" tiene scope
+	// vacío: como allowlist de batch-mode no acota nada, y hace que cualquier par de
+	// sub-tareas se solape. Aceptarlo devolvería un token que parece scopeado y no lo está.
+	if err := flowsvc.ValidarAllowlist(allowedPaths); err != nil {
+		return nil, "flow_grant_token: " + err.Error()
+	}
+
+	if fid, perr := uuid.Parse(flowRunID); perr == nil {
+		if err := reservarTerritorio(ctx, fid, agentID, allowedPaths); err != nil {
+			return nil, "flow_grant_token: " + err.Error()
+		}
+	}
+	return allowedPaths, ""
+}
+
 // allowedPathsDelRequest extrae los globs. La validación de su gramática es aparte, en
 // flowsvc.ValidarAllowlist: acá solo se normaliza.
 //
@@ -500,27 +530,10 @@ func (h *orchestrateHandlers) handleFlowGrantToken(ctx context.Context, req mcp.
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	allowedPaths, err := allowedPathsDelRequest(req)
-	if err != nil {
-		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
-	}
-
-	// El glob se valida al EMITIR y no al editar (DOMAINSERV-218). Un "**/*.go"
-	// tiene scope vacío: como allowlist de batch-mode no acota nada, y hace que
-	// cualquier par de sub-tareas se solape. Aceptarlo devolvería un token que
-	// parece scopeado y no lo está, que es peor que negarlo acá.
-	if err := flowsvc.ValidarAllowlist(allowedPaths); err != nil {
-		return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
-	}
-
 	agentID := req.GetString("agent_id", "")
-
-	// el territorio se reserva ANTES de firmar: si el scope choca con el de otro agente, no
-	// puede quedar un token emitido para una allowlist que el gate despues rechazaria
-	if fid, perr := uuid.Parse(flowRunID); perr == nil {
-		if err := reservarTerritorio(ctx, fid, agentID, allowedPaths); err != nil {
-			return mcp.NewToolResultError("flow_grant_token: " + err.Error()), nil
-		}
+	allowedPaths, errMsg := scopeReservadoParaElGrant(ctx, req, flowRunID, agentID)
+	if errMsg != "" {
+		return mcp.NewToolResultError(errMsg), nil
 	}
 
 	token, err := h.flowToken.GenerateTokenParaAgente(flowRunID, sessionID, h.principal.OrganizationID, agentID, allowedPaths)

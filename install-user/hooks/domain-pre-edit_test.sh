@@ -84,11 +84,25 @@ for ro in 'git stash list' 'git stash show -p' 'git stash list --oneline'; do
   check_not_contains "git-guard permite read-only: $ro" 'git-guard' "$(run "$p")"
 done
 
-# 8) DOMAINSERV-111 (contra-prueba): el stash MUTANTE sigue bloqueado.
-for mu in 'git stash' 'git stash push -m wip' 'git stash pop' 'git stash drop' 'git -C /repo stash'; do
+# 8) DOMAINSERV-111 (contra-prueba): el stash MUTANTE sigue gateado.
+#    DOMAINSERV-278: se afirma la DECISIÓN, no solo que el guard opinó. Buscar 'git-guard'
+#    en la razón es un falso verde — al reclasificar `stash pop` de deny a ask la razón
+#    sigue diciendo git-guard, así que el chequeo pasaba con el comportamiento cambiado.
+while IFS='|' read -r mu esperada; do
   p="{\"session_id\":\"mu-sess\",\"tool_name\":\"Bash\",\"permission_mode\":\"acceptEdits\",\"tool_input\":{\"command\":\"$mu\"}}"
-  check_contains "git-guard bloquea mutante: $mu" 'git-guard' "$(run "$p")"
-done
+  out="$(run "$p")"
+  check_contains "git-guard: $mu -> $esperada" "\"permissionDecision\":\"$esperada\"" "$out"
+done <<'MUS'
+git stash|ask
+git stash push -m wip|ask
+git stash pop|ask
+git -C /repo stash|ask
+git stash drop|deny
+git stash clear|deny
+git worktree remove wt|ask
+git worktree remove --force wt|deny
+git worktree remove wt --force|deny
+MUS
 
 # 9) DOMAINSERV-111: el git-guard no debe disparar por MENCIONES dentro de un
 #    literal (mensaje de commit, heredoc, string). Un mensaje que documenta el
@@ -116,13 +130,17 @@ check_not_contains "git-guard ignora menciones en -m entrecomillado" 'git-guard'
 
 # 10) DOMAINSERV-111 (contra-prueba): el strip de literales NO debe abrir un
 #     bypass. Un intérprete que EJECUTA el literal sigue siendo destructivo.
-while IFS= read -r ev; do
-  check_contains "bypass por intérprete sigue bloqueado: $ev" 'git-guard' \
-    "$(run "$(payload ev-sess "$ev")")"
+# DOMAINSERV-278: se afirma la decisión esperada por comando. El punto del bloque es que un
+# intérprete no abre bypass, y eso se sostiene igual con la clasificación nueva: `restore`
+# es recuperable y cae en ask, pero el guard lo ve — lo que no puede pasar es que se cuele
+# sin decisión.
+while IFS='|' read -r ev esperada; do
+  check_contains "bypass por intérprete sigue gateado: $ev -> $esperada" \
+    "\"permissionDecision\":\"$esperada\"" "$(run "$(payload ev-sess "$ev")")"
 done <<'EVS'
-bash -c "git reset --hard"
-sh -c 'git clean -fd'
-eval "git restore ."
+bash -c "git reset --hard"|deny
+sh -c 'git clean -fd'|deny
+eval "git restore ."|ask
 EVS
 check_contains "destructivo real sigue bloqueado" 'git-guard' \
   "$(run "$(payload ev-sess 'git reset --hard HEAD~1')")"

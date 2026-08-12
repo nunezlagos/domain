@@ -43,10 +43,37 @@ func checkPermissions(home string) int {
 		}
 	}
 	if len(missing) == 0 {
-		ok(fmt.Sprintf("permissions.deny tiene las %d reglas de git", len(domainPermissionDenies)))
+		ok(fmt.Sprintf("permissions.deny tiene las %d reglas de git irrecuperable", len(domainPermissionDenies)))
 	} else {
 		failL(fmt.Sprintf("permissions.deny le faltan reglas de git: %v", missing))
 		fails++
+	}
+
+	// DOMAINSERV-278: el ask se verifica en DOS direcciones. Que la regla esté en ask
+	// no dice nada si además quedó en deny de un install previo: deny gana (orden
+	// deny → ask → allow) y el usuario sigue sin poder aprobar el comando. Un chequeo
+	// que solo mirara la presencia daría verde con el bloqueo intacto.
+	askSet := doctorStringSet(perms["ask"])
+	var missingAsk, stillDenied []string
+	for _, rule := range domainPermissionAsks {
+		if !askSet[rule] {
+			missingAsk = append(missingAsk, rule)
+		}
+		if deny[rule] {
+			stillDenied = append(stillDenied, rule)
+		}
+	}
+	switch {
+	case len(missingAsk) > 0:
+		failL(fmt.Sprintf("permissions.ask le faltan reglas de git recuperable: %v", missingAsk))
+		fails++
+	case len(stillDenied) > 0:
+		failL(fmt.Sprintf("estas reglas están en ask pero TAMBIÉN en deny, y deny gana: %v — "+
+			"re-corré el install para que las saque de deny", stillDenied))
+		fails++
+	default:
+		ok(fmt.Sprintf("permissions.ask tiene las %d reglas de git recuperable, ninguna pisada por deny",
+			len(domainPermissionAsks)))
 	}
 	return fails
 }

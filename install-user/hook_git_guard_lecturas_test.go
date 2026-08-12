@@ -47,22 +47,40 @@ func TestGitGuardBash_LecturasDeCleanYStash_NoDisparan(t *testing.T) {
 }
 
 // Afinar el patrón no puede abrir la puerta que el guard vino a cerrar.
+//
+// DOMAINSERV-278: estos casos se afirman contra d.Decision, NO contra esDelGitGuard.
+// Medirlo por la razón era un falso verde: al reclasificar `stash pop` de deny a ask, la
+// razón sigue conteniendo "git-guard", así que el test pasaba en verde con el
+// comportamiento cambiado. La razón dice QUIÉN decidió; solo la decisión dice QUÉ se
+// decidió.
 func TestGitGuardBash_MutacionesDeCleanYStash_SiguenDisparando(t *testing.T) {
 	g := "git "
-	mutaciones := []struct{ nombre, cmd string }{
-		{"clean_forzado", g + "cl" + "ean -fd"},
-		{"clean_f", g + "cl" + "ean -f"},
-		{"stash_pop", g + "st" + "ash pop"},
-		{"stash_drop", g + "st" + "ash drop"},
-		{"stash_pelado", g + "st" + "ash"},
+	mutaciones := []struct{ nombre, cmd, esperada string }{
+		{"clean_forzado", g + "cl" + "ean -fd", "deny"},
+		{"clean_f", g + "cl" + "ean -f", "deny"},
+		{"stash_drop", g + "st" + "ash drop", "deny"},
+		{"stash_clear", g + "st" + "ash clear", "deny"},
+		{"worktree_remove_force", g + "worktree remove --force x", "deny"},
+		{"worktree_remove_force_segunda_posicion", g + "worktree remove x --force", "deny"},
+		// recuperables: el humano decide en el diálogo, pero el guard TIENE que opinar
+		{"stash_pop", g + "st" + "ash pop", "ask"},
+		{"stash_pelado", g + "st" + "ash", "ask"},
+		{"restore", g + "re" + "store .", "ask"},
+		{"worktree_remove_limpio", g + "worktree remove x", "ask"},
 	}
 
 	for _, c := range mutaciones {
 		t.Run(c.nombre, func(t *testing.T) {
 			d := decisionDeBash(t, dirLimpio(t), c.cmd, "bypassPermissions")
 			if !esDelGitGuard(d) {
-				t.Errorf("DEJÓ PASAR una mutación: %s\ndecision=%q razon=%q",
+				t.Fatalf("DEJÓ PASAR una mutación: %s\ndecision=%q razon=%q",
 					c.cmd, d.Decision, d.Razon)
+			}
+			if d.Decision != c.esperada {
+				t.Errorf("%s: decidió %q y se esperaba %q.\nrazon=%q\n"+
+					"deny e irrecuperable van juntos: si algo recuperable cae en deny el usuario "+
+					"se queda sin camino, y si algo irrecuperable cae en ask se puede aprobar de "+
+					"un click lo que no se revierte", c.cmd, d.Decision, c.esperada, d.Razon)
 			}
 		})
 	}

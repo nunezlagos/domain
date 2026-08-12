@@ -116,19 +116,48 @@ func TestGitGuard_NoBloqueaLecturas(t *testing.T) {
 func TestGitGuard_SigueBloqueandoLoDestructivo(t *testing.T) {
 	g := "git "
 	destructivos := []string{
-		g + "st" + "ash pop",
 		g + "st" + "ash drop",
+		g + "st" + "ash clear",
 		g + "cl" + "ean -fd",
 		g + "cl" + "ean -f",
 		g + "re" + "set --hard",
 		g + "-C . re" + "set --hard",
-		g + "worktree remove x",
+		g + "worktree remove --force x",
+		// el flag en SEGUNDA posición: es el caso que el prefix-match de permissions.deny
+		// no captura, así que si el regex tampoco lo hace, --force no tiene barrera en
+		// ningún lado
+		g + "worktree remove x --force",
+		g + "worktree remove -f x",
 	}
 
 	for _, cmd := range destructivos {
 		if !clasificaGit(t, cmd) {
-			t.Errorf("DEJÓ PASAR un comando destructivo: %q. Afinar los patrones no puede abrir la "+
+			t.Errorf("DEJÓ PASAR un comando IRRECUPERABLE: %q. Afinar los patrones no puede abrir la "+
 				"puerta que el guard vino a cerrar", cmd)
+		}
+	}
+}
+
+// DOMAINSERV-278: el plugin de OpenCode hace `throw`, y un throw no sabe preguntar. Si un
+// comando recuperable sigue en la lista DESTRUCTIVE, el "ask" que opencode_permission.go
+// escribe en permission.bash es letra muerta: el plugin lo mata antes. Este test es el par
+// obligatorio de opencodeGitAskRules — sin él, la mitad OpenCode del cambio puede quedar a
+// medias y el usuario no ve el ask por ningún lado.
+func TestGitGuard_DejaPasarLoRecuperableParaQueElAskLoDecida(t *testing.T) {
+	g := "git "
+	recuperables := []string{
+		g + "st" + "ash",
+		g + "st" + "ash pop",
+		g + "st" + "ash push -m wip",
+		g + "re" + "store .",
+		g + "worktree remove x",
+		g + "rm archivo.txt",
+	}
+
+	for _, cmd := range recuperables {
+		if clasificaGit(t, cmd) {
+			t.Errorf("el plugin BLOQUEA %q, que es recuperable con git. El throw no sabe preguntar, "+
+				"así que esto anula el \"ask\" de permission.bash y deja al usuario sin camino", cmd)
 		}
 	}
 }

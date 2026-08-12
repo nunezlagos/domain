@@ -9,7 +9,7 @@ import (
 
 func TestInstallClaudePermissions_CreatesAllowWhenMissing(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudePermissions(home, "20260101T000000Z"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	perms, _ := readSettings(t, home)["permissions"].(map[string]any)
@@ -36,7 +36,7 @@ func TestInstallClaudePermissions_PreservesUserEntries(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	m := readSettings(t, home)
@@ -58,7 +58,7 @@ func TestInstallClaudePermissions_PreservesUserEntries(t *testing.T) {
 
 func TestInstallClaudePermissions_WritesGitDeny(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudePermissions(home, "20260101T000000Z"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	perms, _ := readSettings(t, home)["permissions"].(map[string]any)
@@ -93,7 +93,7 @@ func TestInstallClaudePermissions_MigratesStaleWriteRules(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	got := toStringSet(readSettings(t, home)["permissions"].(map[string]any)["allow"])
@@ -118,10 +118,10 @@ func TestInstallClaudePermissions_MigratesStaleWriteRules(t *testing.T) {
 
 func TestInstallClaudePermissions_Idempotent(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudePermissions(home, "ts1"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := installClaudePermissions(home, "ts2"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts2"); err != nil {
 		t.Fatal(err)
 	}
 	perms, _ := readSettings(t, home)["permissions"].(map[string]any)

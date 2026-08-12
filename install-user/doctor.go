@@ -18,12 +18,8 @@ func runDoctor(p Platform) int {
 
 	critical := 0
 	critical += checkPython3()
-	critical += checkHooks(home)
-	critical += checkHookMatchers(home)
+	critical += checkPerfilesDeClaude(home)
 	critical += checkMCPEntry(paths)
-	critical += checkPermissions(home)
-	critical += checkInstructions(home)
-	critical += checkClaudeMdExcludes(home)
 	critical += checkOpencodePermission(paths)
 	critical += checkOpencodeInstruction(paths)
 	critical += checkOpencodePlugin(paths)

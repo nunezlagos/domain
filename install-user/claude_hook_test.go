@@ -73,7 +73,7 @@ func TestInstallHook_CreatesSettingsWhenMissing(t *testing.T) {
 		t.Fatalf("precondición: settings.json no debería existir aún")
 	}
 
-	installClaudeSessionStartHook()
+	installClaudeSessionStartHook("")
 
 	if !hookInstalled(t, settingsPath) {
 		t.Fatal("el hook SessionStart no quedó instalado con settings.json ausente")
@@ -84,8 +84,8 @@ func TestInstallHook_CreatesSettingsWhenMissing(t *testing.T) {
 func TestInstallHook_Idempotent(t *testing.T) {
 	settingsPath := prepHookHome(t)
 
-	installClaudeSessionStartHook()
-	installClaudeSessionStartHook()
+	installClaudeSessionStartHook("")
+	installClaudeSessionStartHook("")
 
 	m, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestInstallHook_PreservesUserSettings(t *testing.T) {
 		t.Fatalf("seed settings.json: %v", err)
 	}
 
-	installClaudeSessionStartHook()
+	installClaudeSessionStartHook("")
 
 	m, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {

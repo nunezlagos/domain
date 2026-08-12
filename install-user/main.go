@@ -86,7 +86,11 @@ func main() {
 		showVersion     bool
 		versionCheck    bool
 		showHelp        bool
+		configDirs      repeatableFlag
 	)
+	flag.Var(&configDirs, "claude-config-dir",
+		"Config dir de Claude a configurar (repetible). Default: se detectan los perfiles ~/.claude* "+
+			"y con TTY se pide confirmación; sin TTY se configuran todos")
 	flag.StringVar(&vpsURL, "url", "", "URL del VPS (ej. http://1.2.3.4)")
 	flag.StringVar(&email, "email", "", "Email del usuario")
 	flag.StringVar(&apiKey, "api-key", "", "API key domk_* (si ya la tenés)")
@@ -172,6 +176,7 @@ func main() {
 		NonInteractive: yes,
 		KeepLocalRules: keepLocalRules,
 		RemoveEngram:   removeEngram,
+		Profiles:       resolverPerfilesDeClaude(platform.Home(), configDirs, yes),
 	})
 }
 
@@ -217,6 +222,42 @@ type installOptions struct {
 	NonInteractive bool
 	KeepLocalRules bool // --keep-local-rules: NO neutralizar instrucciones locales (issue-54.1)
 	RemoveEngram   bool // --remove-engram: deshabilita plugin engram si está activo
+	// Profiles son los config dirs de Claude a configurar, ya resueltos por
+	// resolveClaudeProfiles (DOMAINSERV-279). Vacío = no se escribe config de Claude Code.
+	Profiles []claudeProfile
+}
+
+// configurarPerfilDeClaude escribe en UN config dir de Claude: precedencia global,
+// claudeMdExcludes y permissions. Un error en un perfil no aborta los demás — con varias
+// cuentas, que falle la de trabajo no es razón para dejar la personal a medias.
+func configurarPerfilDeClaude(perfil claudeProfile, opts installOptions) {
+	etiqueta := perfil.Path
+	if perfil.Active {
+		etiqueta += " (activo)"
+	}
+	step("Configurando perfil " + etiqueta)
+
+	if err := installGlobalInstructions(perfil.Path, Timestamp()); err != nil {
+		warnL("precedencia global: " + err.Error())
+	} else {
+		ok("CLAUDE.md: " + claudeGlobalPathIn(perfil.Path))
+	}
+
+	if err := installClaudeMdExcludes(perfil.Path, Timestamp(), opts.KeepLocalRules); err != nil {
+		warnL("claudeMdExcludes: " + err.Error())
+	} else if opts.KeepLocalRules {
+		info("--keep-local-rules: se conservan las instrucciones locales de proyecto")
+	} else {
+		ok("claudeMdExcludes: " + claudeSettingsPathIn(perfil.Path))
+	}
+
+	if err := installClaudePermissions(perfil.Path, Timestamp()); err != nil {
+		warnL("permissions: " + err.Error())
+	} else {
+		ok("permissions allow/deny/ask: " + claudeSettingsPathIn(perfil.Path))
+	}
+
+	installClaudeSessionStartHook(perfil.Path)
 }
 
 func runInstall(p Platform, paths Paths, opts installOptions) {
@@ -359,32 +400,14 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 		warnL(fmt.Sprintf("%d hook(s) con cambios locales quedaron SIN actualizar — revisá el detalle de arriba", divergentes))
 	}
 
-	// 5b. Precedencia global en ~/.claude/CLAUDE.md (+ instruction de opencode)
-	step("Escribiendo precedencia global de domain")
-	if err := installGlobalInstructions(p.Home(), Timestamp()); err != nil {
-		warnL("precedencia global: " + err.Error())
-	} else {
-		ok("CLAUDE.md global: " + claudeGlobalPath(p.Home()))
+	// 5b-5d. Config por PERFIL de Claude (DOMAINSERV-279). Los scripts de los hooks
+	// se comparten (se registran con path absoluto), así que acá solo se multiplica lo
+	// que vive dentro del config dir: settings.json, domain.md y persona.md.
+	if len(opts.Profiles) == 0 {
+		warnL("ningún perfil de Claude seleccionado: no se escribió configuración de Claude Code")
 	}
-
-	// 5c. Domain global-first agresivo (issue-54.1): neutralizar instrucciones
-	// locales de proyecto vía claudeMdExcludes, salvo --keep-local-rules.
-	step("Neutralizando instrucciones locales (claudeMdExcludes)")
-	if err := installClaudeMdExcludes(p.Home(), Timestamp(), opts.KeepLocalRules); err != nil {
-		warnL("claudeMdExcludes: " + err.Error())
-	} else if opts.KeepLocalRules {
-		info("--keep-local-rules: se conservan las instrucciones locales de proyecto")
-	} else {
-		ok("claudeMdExcludes global: " + claudeSettingsPath(p.Home()))
-	}
-
-	// 5d. Allowlist de domain (DOMAINSERV-35): permissions.allow para que el
-	// protocolo no dependa del clasificador del permission mode "auto".
-	step("Allowlisteando domain en permissions.allow")
-	if err := installClaudePermissions(p.Home(), Timestamp()); err != nil {
-		warnL("permissions.allow: " + err.Error())
-	} else {
-		ok("permissions.allow global: " + claudeSettingsPath(p.Home()))
+	for _, perfil := range opts.Profiles {
+		configurarPerfilDeClaude(perfil, opts)
 	}
 
 	step("Configurando clientes (MCP transport)")
@@ -439,8 +462,9 @@ func runInstall(p Platform, paths Paths, opts installOptions) {
 	step("Detectando sistemas de memoria legacy (engram)")
 	maybeRemoveEngram(p.Home(), opts, in)
 
-	step("Instalando hook de SessionStart (Claude Code)")
-	installClaudeSessionStartHook()
+	// DOMAINSERV-279: el registro de los hooks se hace por perfil, dentro de
+	// configurarPerfilDeClaude. Acá quedaría clavado en ~/.claude y dejaría sin hooks a
+	// todos los demás perfiles.
 
 	step("Self-check final (doctor)")
 	if rc := runDoctor(p); rc != 0 {

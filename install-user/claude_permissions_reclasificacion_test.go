@@ -46,7 +46,7 @@ func TestInstallClaudePermissions_UpgradeSacaDeDenyLoQuePasoAAsk(t *testing.T) {
 	home := t.TempDir()
 	settingsDeInstallPrevio(t, home)
 
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestInstallClaudePermissions_UpgradeConservaLosDenyIrrecuperables(t *testin
 	home := t.TempDir()
 	settingsDeInstallPrevio(t, home)
 
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -90,7 +90,7 @@ func TestInstallClaudePermissions_UpgradePreservaDenyDelUsuario(t *testing.T) {
 	home := t.TempDir()
 	settingsDeInstallPrevio(t, home)
 
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -106,12 +106,12 @@ func TestInstallClaudePermissions_ReclasificacionEsIdempotente(t *testing.T) {
 	home := t.TempDir()
 	settingsDeInstallPrevio(t, home)
 
-	if err := installClaudePermissions(home, "ts1"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts1"); err != nil {
 		t.Fatalf("install 1: %v", err)
 	}
 	primera := readSettings(t, home)
 
-	if err := installClaudePermissions(home, "ts2"); err != nil {
+	if err := installClaudePermissions(perfilDefault(home), "ts2"); err != nil {
 		t.Fatalf("install 2: %v", err)
 	}
 	segunda := readSettings(t, home)

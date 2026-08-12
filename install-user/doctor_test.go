@@ -35,14 +35,14 @@ func setupHealthyHome(t *testing.T) string {
 	}
 
 	// 2. Registro de hooks + permisos + instrucciones globales.
-	installClaudeSessionStartHook()
-	if err := installClaudePermissions(home, "ts"); err != nil {
+	installClaudeSessionStartHook(perfilDefault(home))
+	if err := installClaudePermissions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("installClaudePermissions: %v", err)
 	}
-	if err := installGlobalInstructions(home, "ts"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "ts"); err != nil {
 		t.Fatalf("installGlobalInstructions: %v", err)
 	}
-	if err := installClaudeMdExcludes(home, "ts", false); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "ts", false); err != nil {
 		t.Fatalf("installClaudeMdExcludes: %v", err)
 	}
 	// entry MCP con la misma forma que escribe el instalador (headers.Authorization).

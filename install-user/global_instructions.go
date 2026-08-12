@@ -40,15 +40,15 @@ func domainImportBlock() string {
 }
 
 // claudeDomainMdPath es ~/.claude/domain.md (archivo dedicado de domain).
-func claudeDomainMdPath(home string) string {
-	return filepath.Join(home, ".claude", "domain.md")
+func claudeDomainMdPathIn(configDir string) string {
+	return filepath.Join(configDir, "domain.md")
 }
 
 // claudePersonaMdPath es ~/.claude/persona.md: la personalidad del agente,
 // archivo dedicado y editable. domain.md lo referencia con `@persona.md`, así
 // que se puede editar el tono sin tocar el protocolo. 100% gestionado.
-func claudePersonaMdPath(home string) string {
-	return filepath.Join(home, ".claude", "persona.md")
+func claudePersonaMdPathIn(configDir string) string {
+	return filepath.Join(configDir, "persona.md")
 }
 
 // personaFileBody es el contenido de ~/.claude/persona.md (template embebido).
@@ -88,8 +88,8 @@ func hasUpToDateDomainBlock(content string) bool {
 
 // claudeGlobalPath es el CLAUDE.md global de Claude Code (~/.claude/CLAUDE.md):
 // instrucciones que aplican a todos los proyectos del usuario.
-func claudeGlobalPath(home string) string {
-	return filepath.Join(home, ".claude", "CLAUDE.md")
+func claudeGlobalPathIn(configDir string) string {
+	return filepath.Join(configDir, "CLAUDE.md")
 }
 
 // installGlobalInstructions escribe el bloque de precedencia de domain en
@@ -99,10 +99,10 @@ func claudeGlobalPath(home string) string {
 // La instruction global de OpenCode se escribe aparte, en el cluster post-Apply
 // de runInstall (installOpencodeGlobalInstruction), porque su directorio de
 // config recién existe después de Apply (DOMAINSERV-101).
-func installGlobalInstructions(home, timestamp string) error {
+func installGlobalInstructions(configDir, timestamp string) error {
 	// 0. Persona en archivo dedicado ~/.claude/persona.md (editable por el
 	//    usuario). domain.md la referencia con @persona.md. Backup si cambia.
-	personaPath := claudePersonaMdPath(home)
+	personaPath := claudePersonaMdPathIn(configDir)
 	persona := personaFileBody()
 	if cur, existed, err := readIfExists(personaPath); err != nil {
 		return fmt.Errorf("read %s: %w", personaPath, err)
@@ -122,7 +122,7 @@ func installGlobalInstructions(home, timestamp string) error {
 
 	// 1. Contenido real de domain en archivo dedicado ~/.claude/domain.md
 	//    (nombre propio, 100% gestionado: se sobreescribe entero). Backup si cambia.
-	domainPath := claudeDomainMdPath(home)
+	domainPath := claudeDomainMdPathIn(configDir)
 	body := domainFileBody()
 	if cur, existed, err := readIfExists(domainPath); err != nil {
 		return fmt.Errorf("read %s: %w", domainPath, err)
@@ -142,7 +142,7 @@ func installGlobalInstructions(home, timestamp string) error {
 
 	// 2. ~/.claude/CLAUDE.md: solo el bloque marcado con @domain.md, preservando
 	//    el contenido del usuario fuera de los marcadores.
-	path := claudeGlobalPath(home)
+	path := claudeGlobalPathIn(configDir)
 	content, existed, err := readIfExists(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)

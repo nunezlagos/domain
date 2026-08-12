@@ -87,14 +87,20 @@ func comandoDelHook(spec claudeHookSpec, hooksDir string) (string, error) {
 // settings.json no existe (instalación limpia), lo crea. Los scripts deben
 // existir en ~/.local/share/domain/hooks/ (los instala install-curl.sh /
 // el install canónico); si falta alguno, se avisa y se salta ese hook.
-func installClaudeSessionStartHook() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		warnL("no pude resolver HOME para instalar hooks: " + err.Error())
-		return
+// DOMAINSERV-279: recibe el config dir del perfil. Los SCRIPTS son compartidos
+// (HooksDirDelSistema, y se registran con path absoluto), pero el REGISTRO vive en el
+// settings.json de cada perfil: un perfil sin registro no ejecuta ningún hook.
+func installClaudeSessionStartHook(configDir string) {
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			warnL("no pude resolver HOME para instalar hooks: " + err.Error())
+			return
+		}
+		configDir = filepath.Join(home, ".claude")
 	}
 	hooksDir := HooksDirDelSistema()
-	settingsPath := claudeSettingsPath(home)
+	settingsPath := claudeSettingsPathIn(configDir)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
 		warnL(settingsPath + " corrupto, hooks no instalados: " + err.Error())

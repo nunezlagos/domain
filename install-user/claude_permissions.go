@@ -127,8 +127,8 @@ func pruneStaleDenies(perms map[string]any, reclassified []string) bool {
 // permissions.allow en ~/.claude/settings.json, preservando las entradas del
 // usuario y sin tocar defaultMode. Idempotente: re-ejecutar no duplica ni
 // acumula backups. Crea permissions/allow si no existen.
-func installClaudePermissions(home, timestamp string) error {
-	path := claudeSettingsPath(home)
+func installClaudePermissions(configDir, timestamp string) error {
+	path := claudeSettingsPathIn(configDir)
 	m, err := loadOrEmptyJSON(path)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", path, err)

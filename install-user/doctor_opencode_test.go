@@ -31,7 +31,7 @@ func TestCheckPermissions_MissingEditAllow_Fails(t *testing.T) {
 	if err := writeJSON(settings, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if checkPermissions(home) == 0 {
+	if checkPermissions(perfilDefault(home)) == 0 {
 		t.Fatal("checkPermissions debía fallar al faltar Edit(**) en allow (DOMAINSERV-102)")
 	}
 }

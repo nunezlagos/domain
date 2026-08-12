@@ -13,7 +13,7 @@ import (
 func setupHealthyHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	homeAislado(t, home)
 
 	// 1. Scripts de hook en disco (requisito de installClaudeSessionStartHook).
 	hooksDir := filepath.Join(home, ".local", "share", "domain", "hooks")

@@ -1,6 +1,25 @@
 package main
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"testing"
+)
+
+// homeAislado fija HOME a un directorio de prueba y ADEMÁS neutraliza
+// CLAUDE_CONFIG_DIR.
+//
+// Lo segundo no es cosmética. Desde DOMAINSERV-279 el doctor resuelve el perfil con
+// detectClaudeProfiles(home, os.Getenv("CLAUDE_CONFIG_DIR")), así que un test que solo
+// pisa HOME sigue leyendo la variable de la máquina que lo corre: con
+// CLAUDE_CONFIG_DIR=~/.claude-work exportada, el doctor audita el perfil REAL del
+// desarrollador en vez del home de prueba y el test falla por el entorno. En CI la
+// variable no existe, así que el fallo es invisible ahí y solo aparece en la máquina de
+// quien la tiene seteada — la misma trampa que bdb95c21 ya había pagado una vez.
+func homeAislado(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+}
 
 // DOMAINSERV-279: las funciones de config de Claude pasaron de recibir el HOME a recibir el
 // CONFIG DIR, porque ahora hay uno por perfil. Estos helpers mantienen la expresividad de las

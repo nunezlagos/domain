@@ -65,32 +65,20 @@ func installOpencodePermission(paths Paths, timestamp string) error {
 		bashRules = map[string]any{}
 	}
 
-	mutated := false
-	for _, rule := range opencodeGitDenyRules {
-		// idempotencia (DOMAINSERV-84): forzar "deny" aunque la regla exista con otro
-		// valor (ej. "ask" de un install previo). Son reglas gestionadas por domain.
-		if v, _ := bashRules[rule].(string); v != "deny" {
-			bashRules[rule] = "deny"
-			mutated = true
-		}
-	}
-	// DOMAINSERV-278: mismo forzado en la otra dirección. Un install previo dejó
-	// estas reglas en "deny"; sin sobrescribirlas el upgrade no cambia nada. Acá el
-	// pisado alcanza porque OpenCode indexa por regla (un map), no una lista ordenada
-	// como el deny/ask de Claude Code — no hay regla stale que arrastrar aparte.
-	for _, rule := range opencodeGitAskRules {
-		if v, _ := bashRules[rule].(string); v != "ask" {
-			bashRules[rule] = "ask"
-			mutated = true
-		}
-	}
-	// idempotencia (DOMAINSERV-84): el catch-all "*" lo exige el doctor como "ask"
-	// (posición de seguridad: lo no listado pregunta, no auto-corre). Forzarlo aunque
-	// exista con otro valor (ej. "allow" de un install/default previo).
-	if v, _ := bashRules["*"].(string); v != "ask" {
-		bashRules["*"] = "ask"
-		mutated = true
-	}
+	// idempotencia (DOMAINSERV-84): se fuerza el valor aunque la regla ya exista con
+	// otro (ej. "ask" de un install previo). Son reglas gestionadas por domain.
+	//
+	// DOMAINSERV-278: el forzado va en AMBAS direcciones — un install previo dejó las
+	// reglas de opencodeGitAskRules en "deny", y sin sobrescribirlas el upgrade no
+	// cambia nada. Acá el pisado alcanza porque OpenCode indexa por regla (un map), no
+	// una lista ordenada como el deny/ask de Claude Code: no hay regla stale que
+	// arrastrar aparte.
+	//
+	// El catch-all "*" lo exige el doctor como "ask" (posición de seguridad: lo no
+	// listado pregunta, no auto-corre).
+	mutated := forceBashRules(bashRules, opencodeGitDenyRules, "deny")
+	mutated = forceBashRules(bashRules, opencodeGitAskRules, "ask") || mutated
+	mutated = forceBashRules(bashRules, []string{"*"}, "ask") || mutated
 	if !mutated {
 		return nil
 	}
@@ -102,4 +90,17 @@ func installOpencodePermission(paths Paths, timestamp string) error {
 		return fmt.Errorf("backup opencode.json: %w", err)
 	}
 	return writeJSON(paths.OpencodeMCP, m)
+}
+
+// forceBashRules fija cada regla de rules al valor want, pisando lo que hubiera.
+// Devuelve true si cambió algo.
+func forceBashRules(bashRules map[string]any, rules []string, want string) bool {
+	mutated := false
+	for _, rule := range rules {
+		if v, _ := bashRules[rule].(string); v != want {
+			bashRules[rule] = want
+			mutated = true
+		}
+	}
+	return mutated
 }

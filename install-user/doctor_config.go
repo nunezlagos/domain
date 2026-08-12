@@ -8,7 +8,7 @@ import (
 
 // checkPermissions verifica que permissions.allow tenga mcp__domain-mcp y que
 // permissions.deny tenga todas las reglas de git de domainPermissionDenies.
-// Devuelve la cantidad de grupos de permisos con problemas (0, 1 o 2).
+// Devuelve la cantidad de grupos de permisos con problemas (0, 1 o 3).
 func checkPermissions(configDir string) int {
 	step("Permisos (allow/deny)")
 	settingsPath := claudeSettingsPathIn(configDir)
@@ -18,42 +18,41 @@ func checkPermissions(configDir string) int {
 		return 2
 	}
 	perms, _ := cfg["permissions"].(map[string]any)
-
-	fails := 0
-
-	allow := doctorStringSet(perms["allow"])
-	var missingAllow []string
-	for _, rule := range domainPermissionAllows {
-		if !allow[rule] {
-			missingAllow = append(missingAllow, rule)
-		}
-	}
-	if len(missingAllow) == 0 {
-		ok(fmt.Sprintf("permissions.allow tiene las %d reglas de domain", len(domainPermissionAllows)))
-	} else {
-		failL(fmt.Sprintf("permissions.allow le faltan reglas: %v", missingAllow))
-		fails++
-	}
-
 	deny := doctorStringSet(perms["deny"])
+
+	fails := checkRulesPresent(doctorStringSet(perms["allow"]), domainPermissionAllows,
+		"permissions.allow tiene las %d reglas de domain",
+		"permissions.allow le faltan reglas: %v")
+	fails += checkRulesPresent(deny, domainPermissionDenies,
+		"permissions.deny tiene las %d reglas de git irrecuperable",
+		"permissions.deny le faltan reglas de git: %v")
+	return fails + checkAskNotShadowedByDeny(perms["ask"], deny)
+}
+
+// checkRulesPresent reporta las reglas de want que faltan en have. okFmt recibe
+// la cantidad esperada; failFmt, la lista de faltantes. Devuelve 1 si falta alguna.
+func checkRulesPresent(have map[string]bool, want []string, okFmt, failFmt string) int {
 	var missing []string
-	for _, rule := range domainPermissionDenies {
-		if !deny[rule] {
+	for _, rule := range want {
+		if !have[rule] {
 			missing = append(missing, rule)
 		}
 	}
-	if len(missing) == 0 {
-		ok(fmt.Sprintf("permissions.deny tiene las %d reglas de git irrecuperable", len(domainPermissionDenies)))
-	} else {
-		failL(fmt.Sprintf("permissions.deny le faltan reglas de git: %v", missing))
-		fails++
+	if len(missing) > 0 {
+		failL(fmt.Sprintf(failFmt, missing))
+		return 1
 	}
+	ok(fmt.Sprintf(okFmt, len(want)))
+	return 0
+}
 
-	// DOMAINSERV-278: el ask se verifica en DOS direcciones. Que la regla esté en ask
-	// no dice nada si además quedó en deny de un install previo: deny gana (orden
-	// deny → ask → allow) y el usuario sigue sin poder aprobar el comando. Un chequeo
-	// que solo mirara la presencia daría verde con el bloqueo intacto.
-	askSet := doctorStringSet(perms["ask"])
+// checkAskNotShadowedByDeny verifica el ask en DOS direcciones (DOMAINSERV-278).
+// Que la regla esté en ask no dice nada si además quedó en deny de un install
+// previo: deny gana (orden deny → ask → allow) y el usuario sigue sin poder
+// aprobar el comando. Un chequeo que solo mirara la presencia daría verde con el
+// bloqueo intacto.
+func checkAskNotShadowedByDeny(rawAsk any, deny map[string]bool) int {
+	askSet := doctorStringSet(rawAsk)
 	var missingAsk, stillDenied []string
 	for _, rule := range domainPermissionAsks {
 		if !askSet[rule] {
@@ -66,16 +65,15 @@ func checkPermissions(configDir string) int {
 	switch {
 	case len(missingAsk) > 0:
 		failL(fmt.Sprintf("permissions.ask le faltan reglas de git recuperable: %v", missingAsk))
-		fails++
+		return 1
 	case len(stillDenied) > 0:
 		failL(fmt.Sprintf("estas reglas están en ask pero TAMBIÉN en deny, y deny gana: %v — "+
 			"re-corré el install para que las saque de deny", stillDenied))
-		fails++
-	default:
-		ok(fmt.Sprintf("permissions.ask tiene las %d reglas de git recuperable, ninguna pisada por deny",
-			len(domainPermissionAsks)))
+		return 1
 	}
-	return fails
+	ok(fmt.Sprintf("permissions.ask tiene las %d reglas de git recuperable, ninguna pisada por deny",
+		len(domainPermissionAsks)))
+	return 0
 }
 
 // checkInstructions verifica que existan ~/.claude/domain.md y persona.md y que

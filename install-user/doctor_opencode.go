@@ -39,12 +39,25 @@ func checkOpencodePermission(paths Paths) int {
 		failL(fmt.Sprintf("faltan reglas deny en permission.bash: %v", missing))
 		return 1
 	}
+	// DOMAINSERV-278: las recuperables tienen que estar en "ask", no en "deny" de un
+	// install previo. Acá alcanza con mirar el valor porque OpenCode indexa por regla.
+	var wrongAsk []string
+	for _, rule := range opencodeGitAskRules {
+		if v, ok := bashRules[rule]; !ok || fmt.Sprint(v) != "ask" {
+			wrongAsk = append(wrongAsk, rule)
+		}
+	}
+	if len(wrongAsk) > 0 {
+		failL(fmt.Sprintf("estas reglas de git recuperable no están en ask en permission.bash: %v — "+
+			"re-corré el install", wrongAsk))
+		return 1
+	}
 	// catch-all: sin bash["*"]="ask" el last-match-wins no gatea el resto.
 	if v, ok := bashRules["*"]; !ok || fmt.Sprint(v) != "ask" {
 		failL(paths.OpencodeMCP + `: permission.bash falta el catch-all "*":"ask"`)
 		return 1
 	}
-	ok(`reglas git deny + catch-all "*":"ask" presentes en permission.bash`)
+	ok(`reglas git deny + ask + catch-all "*":"ask" presentes en permission.bash`)
 	return 0
 }
 

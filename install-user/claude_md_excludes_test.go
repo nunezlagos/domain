@@ -29,7 +29,7 @@ func toStringSet(v any) map[string]bool {
 
 func TestInstallClaudeMdExcludes_WritesAllGlobs(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudeMdExcludes(home, "20260101T000000Z", false); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "20260101T000000Z", false); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	got := toStringSet(readSettings(t, home)["claudeMdExcludes"])
@@ -42,7 +42,7 @@ func TestInstallClaudeMdExcludes_WritesAllGlobs(t *testing.T) {
 
 func TestInstallClaudeMdExcludes_KeepLocalIsNoOp(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudeMdExcludes(home, "ts", true); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "ts", true); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	if _, err := os.Stat(claudeSettingsPath(home)); !os.IsNotExist(err) {
@@ -62,7 +62,7 @@ func TestInstallClaudeMdExcludes_PreservesUserEntries(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := installClaudeMdExcludes(home, "ts", false); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "ts", false); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 	m := readSettings(t, home)
@@ -95,10 +95,10 @@ func TestUpsertStringInArray_PreservesScalarValue(t *testing.T) {
 
 func TestInstallClaudeMdExcludes_Idempotent(t *testing.T) {
 	home := t.TempDir()
-	if err := installClaudeMdExcludes(home, "ts1", false); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "ts1", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := installClaudeMdExcludes(home, "ts2", false); err != nil {
+	if err := installClaudeMdExcludes(perfilDefault(home), "ts2", false); err != nil {
 		t.Fatal(err)
 	}
 	arr, _ := readSettings(t, home)["claudeMdExcludes"].([]any)

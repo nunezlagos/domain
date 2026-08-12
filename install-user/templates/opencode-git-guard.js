@@ -19,16 +19,19 @@
 // es cerrada y conocida, mientras que las variantes de lectura crecen con cada versión de git.
 // Enumerar lo peligroso deja lo nuevo por defecto permitido; enumerar lo seguro lo dejaría
 // bloqueado, que es peor para un guard que ya demostró fallar por exceso.
+// DOMAINSERV-278: solo lo IRRECUPERABLE. El throw de abajo no sabe preguntar, así que
+// todo lo que quede acá es un bloqueo sin puerta — lo que git puede revertir se resuelve
+// con "ask" en el bloque permission.bash de opencode.json (opencodeGitAskRules).
 const DESTRUCTIVE = [
   /git\s+reset\s+--hard/,
   // clean sin -n/--dry-run: cualquier otra combinación de flags borra archivos
   /git\s+clean\s+(?!.*(?:-n\b|--dry-run\b))\S/,
-  // de stash solo mutan pop, drop, apply, clear y el push/save implícito
-  /git\s+stash\s*(?:$|\s+(?:pop|drop|apply|clear|push|save|store|create|branch)\b)/,
-  /git\s+checkout\s+(--|\.)/,
-  /git\s+restore\b/,
-  /git\s+rm\b/,
-  /git\s+worktree\s+remove\b/,
+  // de stash, drop y clear son los que destruyen: recuperarlos exige pescar dangling
+  // commits del reflog. pop/apply/push/save son recuperables y salen a "ask"
+  /git\s+stash\s+(?:drop|clear)\b/,
+  // --force borra un worktree CON cambios sin commitear; sin el flag git se niega solo
+  // si está sucio, y ese caso es aprobable
+  /git\s+worktree\s+remove\b(?=.*(?:--force\b|-f\b))/,
 ]
 
 // isDestructiveGit normaliza el comando y devuelve true si contiene un git
@@ -48,9 +51,9 @@ export const DomainGitGuard = async () => {
       const cmd = output && output.args ? output.args.command : ""
       if (isDestructiveGit(cmd)) {
         throw new Error(
-          "domain git-guard: comando git destructivo bloqueado " +
-            "(reset --hard / clean / stash / checkout -- | . / restore / rm / worktree remove). " +
-            "El agente NUNCA ejecuta git mutante sobre tu working tree. " +
+          "domain git-guard: comando git irrecuperable bloqueado " +
+            "(reset --hard / clean / stash drop|clear / worktree remove --force). " +
+            "Esto no se revierte con git, así que el agente no lo ejecuta. " +
             "Si de verdad lo necesitas, córrelo vos manualmente fuera del agente.",
         )
       }

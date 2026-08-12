@@ -67,7 +67,7 @@ func TestInstallGlobalInstructions_DoesNotWriteOpencodeInstruction(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestInstallGlobalInstructions_WritesDomainMdAndImport(t *testing.T) {
 	}
 
 	// Idempotente: segunda corrida no crea backups nuevos.
-	if err := installGlobalInstructions(home, "20260202T000000Z"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "20260202T000000Z"); err != nil {
 		t.Fatalf("2a corrida: %v", err)
 	}
 	bk, _ := filepath.Glob(claudeDomainMdPath(home) + ".backup-*")
@@ -123,7 +123,7 @@ func TestInstallGlobalInstructions_WritesPersonaAndReference(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	if err := installGlobalInstructions(home, "20260101T000000Z"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "20260101T000000Z"); err != nil {
 		t.Fatalf("install: %v", err)
 	}
 
@@ -144,7 +144,7 @@ func TestInstallGlobalInstructions_WritesPersonaAndReference(t *testing.T) {
 	}
 
 	// Idempotente: segunda corrida no crea backups nuevos de persona.md.
-	if err := installGlobalInstructions(home, "20260202T000000Z"); err != nil {
+	if err := installGlobalInstructions(perfilDefault(home), "20260202T000000Z"); err != nil {
 		t.Fatalf("2a corrida: %v", err)
 	}
 	if bk, _ := filepath.Glob(claudePersonaMdPath(home) + ".backup-*"); len(bk) != 0 {

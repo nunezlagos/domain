@@ -7,9 +7,9 @@ import (
 
 // checkHooks verifica cada hook de claudeHooks: script presente en disco Y
 // registrado en settings.json. Devuelve la cantidad de hooks con problemas.
-func checkHooks(home string) int {
+func checkHooks(configDir string) int {
 	step("Hooks (settings.json + scripts)")
-	settingsPath := claudeSettingsPath(home)
+	settingsPath := claudeSettingsPathIn(configDir)
 	hooksDir := HooksDirDelSistema()
 
 	cfg, err := loadOrEmptyJSON(settingsPath)
@@ -91,9 +91,9 @@ func reportarProcedencia(evento, script, hookPath string, manifiesto manifiestoA
 // matcher correcto según su spec. El hook se registra con un matcher regex que
 // filtra en qué eventos dispara; si el matcher no está o es incorrecto, el hook
 // corre en momentos inesperados o no corre cuando debería (DOMAINSERV-76).
-func checkHookMatchers(home string) int {
+func checkHookMatchers(configDir string) int {
 	step("Hook matchers (settings.json)")
-	settingsPath := claudeSettingsPath(home)
+	settingsPath := claudeSettingsPathIn(configDir)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
 		failL("settings.json ilegible (" + settingsPath + "): " + err.Error())

@@ -18,12 +18,15 @@
 #     falsos negativos posibles — la policy explícita cubre el resto.
 #
 # Endurecimiento (pre-edit-hardening):
-#   (A) GIT GUARD: git destructivo (reset --hard / clean / stash mutante /
-#       checkout -- | . / restore / rm / worktree remove) → deny SIEMPRE,
-#       incluso con flow activo o en subagentes. Normaliza global options
-#       (-C, -c, --git-dir, --work-tree) para evitar evasiones. Defensa en
-#       profundidad por si el permissions.deny fallara. `git stash list|show`
-#       es read-only y pasa (DOMAINSERV-111).
+#   (A) GIT GUARD: clasifica por RECUPERABILIDAD (DOMAINSERV-278), no por
+#       "es mutante". deny para lo irrecuperable (reset --hard / clean /
+#       stash drop|clear / worktree remove --force); ask para lo que git puede
+#       revertir (stash / checkout -- | . / restore / rm / worktree remove), que
+#       aprueba el humano en el diálogo. Ambos corren SIEMPRE, incluso con flow
+#       activo o en subagentes. Normaliza global options (-C, -c, --git-dir,
+#       --work-tree) para evitar evasiones. Defensa en profundidad por si el
+#       permissions.deny/ask fallara. `git stash list|show` es read-only y pasa
+#       (DOMAINSERV-111).
 #   (A2) GUARD DESTRUCTIVO (DOMAINSERV-222): lo que el git-guard NO cubre porque
 #       no se recupera con git. NO mira el FLAG, mira el RADIO DE DAÑO: rm
 #       RECURSIVO del cwd / raíz del repo / un ancestro / . / $HOME / .git / una
@@ -164,13 +167,30 @@ normalized = re.sub(
     "git ",
     cmd
 )
-pats = [
+# DOMAINSERV-278: la clasificación es por RECUPERABILIDAD, no por "es mutante". Lo que git
+# puede revertir sale a "ask" y lo decide el humano en el diálogo; deny queda para lo que no
+# tiene vuelta. El criterio anterior ("todo git mutante → deny SIEMPRE") medía la categoría
+# del comando en vez del daño, y eso dejaba sin puerta casos de riesgo cero: un
+# `git worktree remove` sobre un worktree limpio no se podía ejecutar NI aprobar, porque el
+# deny se evalúa antes que el sistema de permisos.
+pats_deny = [
     r"git\s+reset\s+--hard",
     # DOMAINSERV-247: -n y --dry-run son READ-ONLY. El patrón amplio los bloqueaba, y eso
     # se midió en vivo: este mismo guard rechazó un comando de diagnóstico que solo
     # mencionaba "git clean -n" dentro de un script. Es el mismo arreglo que DOMAINSERV-111
     # hizo para stash, que había quedado a medias.
     r"git\s+clean\s+(?!.*(?:-n\b|--dry-run\b))\S",
+    # drop y clear DESTRUYEN el stash: recuperarlo exige pescar dangling commits del reflog.
+    # El resto de stash es recuperable y baja a pats_ask.
+    r"git\s+stash\s+(?:drop|clear)\b",
+    # --force borra un worktree CON cambios sin commitear. Sin el flag git se niega solo si
+    # está sucio, así que ese caso es aprobable y baja a pats_ask. El flag puede venir en
+    # cualquier posición (`worktree remove x --force`), por eso el lookahead y no un prefijo:
+    # el prefix-match de permissions.deny no captura la segunda posición, el regex sí.
+    r"git\s+worktree\s+remove\b(?=.*(?:--force\b|-f\b))",
+]
+# Recuperable con git: el humano aprueba en el diálogo en vez de quedarse sin camino.
+pats_ask = [
     # DOMAINSERV-111: list/show son READ-ONLY, no mutan el working tree
     r"git\s+stash\b(?!\s+(?:list|show)\b)",
     r"git\s+checkout\s+(--|\.)",
@@ -178,10 +198,17 @@ pats = [
     r"git\s+rm\b",
     r"git\s+worktree\s+remove\b",
 ]
-print("yes" if any(re.search(p, normalized) for p in pats) else "")
+if any(re.search(p, normalized) for p in pats_deny):
+    print("deny")
+elif any(re.search(p, normalized) for p in pats_ask):
+    print("ask")
+else:
+    print("")
 ' 2>/dev/null)
-  if [ "$git_destructive" = "yes" ]; then
-    emit_decision "deny" "domain git-guard: comando git destructivo bloqueado (reset --hard / clean / stash / checkout -- | . / restore / rm / worktree remove). El agente NUNCA ejecuta git mutante sobre tu working tree. Si de verdad lo necesitas, córrelo tú manualmente fuera del agente."
+  if [ "$git_destructive" = "deny" ]; then
+    emit_decision "deny" "domain git-guard: comando git irrecuperable bloqueado (reset --hard / clean / stash drop|clear / worktree remove --force). Esto no se revierte con git, así que el agente no lo ejecuta. Si de verdad lo necesitas, córrelo tú manualmente fuera del agente."
+  elif [ "$git_destructive" = "ask" ]; then
+    emit_decision "ask" "domain git-guard: comando git mutante pero RECUPERABLE (stash / checkout -- | . / restore / rm / worktree remove). Revisá el comando antes de aprobar: git puede revertirlo, pero igual toca tu working tree."
   fi
 fi
 

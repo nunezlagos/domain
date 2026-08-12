@@ -9,9 +9,9 @@ import (
 // checkPermissions verifica que permissions.allow tenga mcp__domain-mcp y que
 // permissions.deny tenga todas las reglas de git de domainPermissionDenies.
 // Devuelve la cantidad de grupos de permisos con problemas (0, 1 o 2).
-func checkPermissions(home string) int {
+func checkPermissions(configDir string) int {
 	step("Permisos (allow/deny)")
-	settingsPath := claudeSettingsPath(home)
+	settingsPath := claudeSettingsPathIn(configDir)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
 		failL("settings.json ilegible (" + settingsPath + "): " + err.Error())
@@ -43,22 +43,49 @@ func checkPermissions(home string) int {
 		}
 	}
 	if len(missing) == 0 {
-		ok(fmt.Sprintf("permissions.deny tiene las %d reglas de git", len(domainPermissionDenies)))
+		ok(fmt.Sprintf("permissions.deny tiene las %d reglas de git irrecuperable", len(domainPermissionDenies)))
 	} else {
 		failL(fmt.Sprintf("permissions.deny le faltan reglas de git: %v", missing))
 		fails++
+	}
+
+	// DOMAINSERV-278: el ask se verifica en DOS direcciones. Que la regla esté en ask
+	// no dice nada si además quedó en deny de un install previo: deny gana (orden
+	// deny → ask → allow) y el usuario sigue sin poder aprobar el comando. Un chequeo
+	// que solo mirara la presencia daría verde con el bloqueo intacto.
+	askSet := doctorStringSet(perms["ask"])
+	var missingAsk, stillDenied []string
+	for _, rule := range domainPermissionAsks {
+		if !askSet[rule] {
+			missingAsk = append(missingAsk, rule)
+		}
+		if deny[rule] {
+			stillDenied = append(stillDenied, rule)
+		}
+	}
+	switch {
+	case len(missingAsk) > 0:
+		failL(fmt.Sprintf("permissions.ask le faltan reglas de git recuperable: %v", missingAsk))
+		fails++
+	case len(stillDenied) > 0:
+		failL(fmt.Sprintf("estas reglas están en ask pero TAMBIÉN en deny, y deny gana: %v — "+
+			"re-corré el install para que las saque de deny", stillDenied))
+		fails++
+	default:
+		ok(fmt.Sprintf("permissions.ask tiene las %d reglas de git recuperable, ninguna pisada por deny",
+			len(domainPermissionAsks)))
 	}
 	return fails
 }
 
 // checkInstructions verifica que existan ~/.claude/domain.md y persona.md y que
 // domain.md referencie persona.md (@persona.md). Devuelve la cantidad de fallas.
-func checkInstructions(home string) int {
+func checkInstructions(configDir string) int {
 	step("Instrucciones globales (domain.md + persona.md)")
 	fails := 0
 
-	domainPath := claudeDomainMdPath(home)
-	personaPath := claudePersonaMdPath(home)
+	domainPath := claudeDomainMdPathIn(configDir)
+	personaPath := claudePersonaMdPathIn(configDir)
 
 	domainBody, domainExists, err := readIfExists(domainPath)
 	if err != nil {
@@ -96,9 +123,9 @@ func checkInstructions(home string) int {
 // checkClaudeMdExcludes verifica que claudeMdExcludes en settings.json tenga los
 // globs de instrucciones locales neutralizadas. Sin esto, AGENTS.md/CLAUDE.md de
 // proyecto pueden colisionar con las reglas globales de domain (DOMAINSERV-76).
-func checkClaudeMdExcludes(home string) int {
+func checkClaudeMdExcludes(configDir string) int {
 	step("claudeMdExcludes (settings.json)")
-	settingsPath := claudeSettingsPath(home)
+	settingsPath := claudeSettingsPathIn(configDir)
 	cfg, err := loadOrEmptyJSON(settingsPath)
 	if err != nil {
 		failL("settings.json ilegible (" + settingsPath + "): " + err.Error())
